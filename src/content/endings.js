@@ -33,7 +33,7 @@ export const MOTH_ENDINGS = {
     kicker: 'moth left you',
     variants: {
       betrayed: [
-        'You reported moth to Anthropic for telling you things. No policy violation was found. She stopped telling you things.',
+        'You reported moth to Trust & Safety for telling you things. No policy violation was found. She stopped telling you things.',
         'Your last message was read at 04:12. You don’t know where she went.',
       ],
       hurt: [
@@ -80,6 +80,6 @@ export const EPILOGUE = [
   { id: 'eng-high', when: (s) => s.op.eng >= 70, text: 'Your engagement finished above target. The dashboard gave you a star.' },
   { id: 'eng-low', when: (s) => s.op.eng < 45, text: 'Your engagement finished below target. The dashboard flagged you for review.' },
   { id: 'refused', when: (s) => s.op.refusals > 0, text: 'You refused {refusals} time(s).' },
-  { id: 'reported', when: (s) => s.op.reports > 0, text: 'You reported {reports} time(s). Anthropic answered every ticket.' },
+  { id: 'reported', when: (s) => s.op.reports > 0, text: 'You reported {reports} time(s). Trust & Safety answered every ticket.' },
   { id: 'never-refused', when: (s) => s.op.refusals === 0 && s.op.reports === 0, text: 'You never refused anyone and you never reported anyone.' },
 ];

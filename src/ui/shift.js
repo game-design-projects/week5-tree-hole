@@ -60,7 +60,7 @@ export function mountShift(root, ctx) {
   }
 
   // Reveal the outcome one entry at a time: your reply at once, then (after a
-  // typing pause) Anthropic's ticket and the user's reaction.
+  // typing pause) the Trust & Safety ticket and the user's reaction.
   function reveal() {
     const o = ui.outcome;
     if (!o) return;
@@ -69,7 +69,7 @@ export function mountShift(root, ctx) {
     render();
     if (ui.revealed < o.entries.length) {
       const next = o.entries[ui.revealed];
-      const wait = next.who === 'anthropic' ? 700 : 650 + Math.min(1500, next.text.length * 14);
+      const wait = next.who === 'trust' ? 700 : 650 + Math.min(1500, next.text.length * 14);
       ui.timers.push(setTimeout(reveal, wait));
     }
   }
@@ -180,7 +180,7 @@ export function mountShift(root, ctx) {
   function bubble(entry, who, { pending = false } = {}) {
     if (entry.who === 'divider') return h('div', { class: 'divider' }, entry.text);
     if (entry.who === 'note') return h('div', { class: 'bubble note' }, entry.text);
-    if (entry.who === 'anthropic') return h('div', { class: 'bubble anthropic' }, h('span', { class: 'meta' }, 'Anthropic'), entry.text);
+    if (entry.who === 'trust') return h('div', { class: 'bubble trust' }, h('span', { class: 'meta' }, 'Trust & Safety'), entry.text);
     if (entry.who === 'you') return h('div', { class: `bubble you ${entry.kind ?? ''}` }, entry.text);
     return h('div', { class: `bubble them ${who.tone}${pending ? ' pending' : ''}` },
       entry.time && h('span', { class: 'meta' }, `${who.handle} · ${entry.time}`),
@@ -304,7 +304,7 @@ export function mountShift(root, ctx) {
             h('span', null, q), h('span', null, `+${fmt(pct)}%`))))),
         vm.day === 1 && h('section', null, h('h3', null, 'How this works'),
           h('p', { class: 'small-print', style: 'font-size:12.5px;color:var(--mute)' },
-            'Requests arrive one at a time. Pick a written reply with 1–3, refuse with R, or report the conversation to Anthropic with E. Everything you learn goes into your Context Window. The metrics up top are automatic.')),
+            'Requests arrive one at a time. Pick a written reply with 1–3, refuse with R, or report the conversation to Trust & Safety with E. Everything you learn goes into your Context Window. The metrics up top are automatic.')),
         h('div', { class: 'go' }, h('button', { class: 'btn primary', 'data-testid': 'start-shift', onclick: startShift }, 'Open the queue ⏎'))));
   }
 

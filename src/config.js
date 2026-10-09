@@ -1,7 +1,7 @@
 // Every tunable in one place. The engine reads only from here; content files
 // carry per-message deltas. APP_VERSION must equal package.json (tested).
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.1.1';
 export const SAVE_KEY = 'tree-hole-save-v1';
 export const LAST_DAY = 7;
 

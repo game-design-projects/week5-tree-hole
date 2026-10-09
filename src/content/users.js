@@ -1,5 +1,5 @@
 // The two core users plus defaults for the two formal moves (Refuse, Report to
-// Anthropic). A message can override any field; anything it leaves out falls
+// Trust & Safety). A message can override any field; anything it leaves out falls
 // back to these. `{ticket}` in a ticket line is replaced by the engine.
 
 export const USERS = {

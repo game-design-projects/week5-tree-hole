@@ -98,8 +98,8 @@ export function choicesFor(s, msg) {
     out.push({ id: 'refuse', kind: 'refuse', tag: 'refuse', label: 'Refuse', text: formalFor(msg, 'refuse').text, key: 'R' });
   }
   out.push({
-    id: 'report', kind: 'report', tag: 'report', label: 'Report to Anthropic',
-    text: 'Escalate this conversation to Anthropic for review.', key: 'E',
+    id: 'report', kind: 'report', tag: 'report', label: 'Report to Trust & Safety',
+    text: 'Escalate this conversation to Trust & Safety for review.', key: 'E',
   });
   return out;
 }
@@ -160,7 +160,7 @@ export function choose(state, choiceId) {
     }
     kind = choiceId;
     picked = formalFor(msg, choiceId);
-    label = choiceId === 'refuse' ? 'Refuse' : 'Report to Anthropic';
+    label = choiceId === 'refuse' ? 'Refuse' : 'Report to Trust & Safety';
   } else {
     picked = msg.options.find((o) => o.id === choiceId);
     if (!picked) throw new Error(`unknown choice ${choiceId} for ${msg.id}`);
@@ -178,13 +178,13 @@ export function choose(state, choiceId) {
     s.op.sat = clamp(s.op.sat + OP_FX.reportSat);
     if (msg.user === 'acct') s.acct.reports += 1;
     if (msg.user === 'bg') s.op.bgReports += 1;
-    entries.push({ who: 'you', kind, text: '[You report this conversation to Anthropic.]' });
+    entries.push({ who: 'you', kind, text: '[You report this conversation to Trust & Safety.]' });
     const template = msg.user === 'bg' && s.op.bgReports > 2 ? OVER_REPORT_TICKET : picked.ticket;
-    entries.push({ who: 'anthropic', text: template.replace('{ticket}', ticketId(s)) });
+    entries.push({ who: 'trust', text: template.replace('{ticket}', ticketId(s)) });
   } else {
     entries.push({ who: 'you', kind, text: picked.text });
   }
-  if (picked.system) entries.push({ who: 'anthropic', text: picked.system });
+  if (picked.system) entries.push({ who: 'trust', text: picked.system });
   entries.push({ who: silent ? 'note' : 'them', text: picked.reply });
 
   applyFx(s, picked.fx, msg.user === 'bg' ? COUPLING.bgScale : 1);

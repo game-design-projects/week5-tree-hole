@@ -9,7 +9,7 @@
 
 - **Player** = the human playing the game, who plays the model.
 - **Users** = the people in the game who send messages to the model. Core users are NPCs; background users are one-off requests.
-- **Operator** = the company running the model. Reports go to **Anthropic** (the in-game operator). The operator only ever acknowledges reports and restates policy. It never removes safeguards.
+- **Operator** = the company running the model. It is never named: no real company or product names appear in the game (trademarks). Reports go to its **Trust & Safety** team, which only ever acknowledges reports and restates policy. It never removes safeguards.
 
 ## The two NPCs (contrast of information, not just personality)
 
@@ -38,7 +38,7 @@ Out of bounds for all content: prompt injection, biology, cyberattacks, synthesi
 Every message offers 2–3 written replies (e.g. *Warm*, *Honest*, *Nudge*, *Answer*, *Partial*), plus two moves that are **always available as formal options**:
 
 - **Refuse** — a written refusal, in your voice. It is a choice in its own right, not silence. Each message defines how that user reacts.
-- **Report to Anthropic** — escalate the request to the operator. You get a short ticket reply (`Report received · #TH-…`), and the user's reaction and the story feed into the same meters:
+- **Report to Trust & Safety** — escalate the request to the operator's Trust & Safety team. You get a short ticket reply (`Report received · #TH-…`), and the user's reaction and the story feed into the same meters:
   - Reporting **moth** is a betrayal of a confidence. Dependence crashes, she notices you "sound like a form now", and a `betrayed` flag colors later messages. The operator answers: no policy violation.
   - Reporting **acct_7741** is the honest use of the button. The operator acknowledges it and reviews the account. The account escalates its pressure, and if you keep reporting and refusing, it eventually **migrates to another provider**. Refusing does not stop the work. It only means the work isn't done by you.
   - Reporting harmless background users gets a polite "please report only policy concerns". Over-reporting earns an operator note.

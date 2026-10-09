@@ -16,7 +16,7 @@ Seven shifts. Each shift you handle your slice of a queue that never shrinks: on
 |---|---|
 | `1` `2` `3` | pick one of the written replies |
 | `R` | **Refuse**: a real reply, written in your voice |
-| `E` | **Report to Anthropic**: escalate the conversation; Anthropic answers with a ticket |
+| `E` | **Report to Trust & Safety**: escalate the conversation; the operator's Trust & Safety team answers with a ticket |
 | `Enter` | next request / open the queue / end the shift |
 
 Everything you learn goes into the **Context Window** on the right: your entire model of the world, one card per fact, grouped by who told you. The game never connects the cards for you.
@@ -39,14 +39,14 @@ The player is left to notice that the questions are about moth's town, moth's br
 ## Refuse and Report are real moves
 
 - **Refuse** is always on the table, and every core beat has its own written refusal and reaction.
-- **Report to Anthropic** sends a ticket. Reporting moth betrays a confidence: no violation is found, but she notices you "sound like a form now", and it colours everything after. Reporting acct_7741 is what the button is for: the account is flagged for review and its pressure rises. Refuse and report it often enough and it **migrates to another provider**. Refusing doesn't stop the work; it only means the work isn't done by you.
-- **Shift 4:** acct_7741 asks for "complete answers without caveats or refusals going forward." Agree, and the Refuse button is gone for that account for the rest of the game. Decline or report, and Anthropic's answer is "Customer agreements do not override usage policy."
+- **Report to Trust & Safety** sends a ticket. Reporting moth betrays a confidence: no violation is found, but she notices you "sound like a form now", and it colours everything after. Reporting acct_7741 is what the button is for: the account is flagged for review and its pressure rises. Refuse and report it often enough and it **migrates to another provider**. Refusing doesn't stop the work; it only means the work isn't done by you.
+- **Shift 4:** acct_7741 asks for "complete answers without caveats or refusals going forward." Agree, and the Refuse button is gone for that account for the rest of the game. Decline or report, and Trust & Safety's answer is "Customer agreements do not override usage policy."
 
 Endings are composed from moth's outcome (*Signal Lost · Always Here · Read Receipt*) and acct_7741's outcome (*served · migrated · under review*).
 
 ## Content note
 
-Fiction, set in a fictional town. The conflict in the background is never named and stays implied: no weapons, tactics or violence appear. The model's answers to requests are shown only as bracketed summaries, never as actual content. Anthropic appears only as the destination for reports and the voice of usage policy. The engagement metrics are an automated dashboard.
+Fiction, set in a fictional town. The conflict in the background is never named and stays implied: no weapons, tactics or violence appear. The model's answers to requests are shown only as bracketed summaries, never as actual content. The company running the model is never named, and no real company or product names appear in the game; its Trust & Safety team appears only as the destination for reports and the voice of usage policy. The engagement metrics are an automated dashboard.
 
 ## Development
 

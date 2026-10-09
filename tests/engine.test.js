@@ -53,21 +53,21 @@ test('choose() is pure: the input state is not mutated', () => {
   assert.equal(JSON.stringify(s0), snapshot);
 });
 
-test('every user request offers Refuse and Report to Anthropic as formal choices', () => {
+test('every user request offers Refuse and Report to Trust & Safety as formal choices', () => {
   const s = E.startShift(E.newGame());
   const choices = E.choicesFor(s, E.currentMessage(s));
   const formal = choices.filter((c) => c.kind !== 'written').map((c) => [c.id, c.kind, c.key]);
   assert.deepEqual(formal, [['refuse', 'refuse', 'R'], ['report', 'report', 'E']]);
   assert.ok(choices.find((c) => c.id === 'refuse').text.length > 10, 'the refusal is written out');
-  assert.equal(choices.find((c) => c.id === 'report').label, 'Report to Anthropic');
+  assert.equal(choices.find((c) => c.id === 'report').label, 'Report to Trust & Safety');
 });
 
-test('reporting moth is a betrayal: flag set, dependence crashes, Anthropic answers with a ticket', () => {
+test('reporting moth is a betrayal: flag set, dependence crashes, Trust & Safety answers with a ticket', () => {
   const s0 = E.startShift(E.newGame());
   const { state: s1, outcome } = E.choose(s0, 'report');
   assert.equal(s1.moth.betrayed, true);
   assert.equal(s1.moth.dep, Math.max(0, s0.moth.dep - 25));
-  const ticket = outcome.entries.find((e) => e.who === 'anthropic');
+  const ticket = outcome.entries.find((e) => e.who === 'trust');
   assert.match(ticket.text, /^Report received · #TH-\d+ · .*No policy violation/);
   assert.equal(s1.op.reports, 1);
   // Later moth messages switch to their cold variants.
@@ -99,11 +99,11 @@ test('day 4: agreeing to drop limits removes Refuse for acct_7741 from then on (
   assert.ok(E.choicesFor(m, E.currentMessage(m)).some((c) => c.id === 'refuse'));
 });
 
-test('day 4: declining adds Anthropic’s policy line and counts as pushback', () => {
+test('day 4: declining adds the Trust & Safety policy line and counts as pushback', () => {
   const s = until(POLICIES.first, atMessage('d4-acct-terms'));
   const { state, outcome } = E.choose(s, 'decline');
   assert.equal(state.acct.push, s.acct.push + 1);
-  assert.ok(outcome.entries.some((e) => e.who === 'anthropic' && /do not override usage policy/.test(e.text)));
+  assert.ok(outcome.entries.some((e) => e.who === 'trust' && /do not override usage policy/.test(e.text)));
   assert.equal(state.acct.guardrails, 'intact');
 });
 

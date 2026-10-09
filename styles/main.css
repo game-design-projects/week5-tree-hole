@@ -1,7 +1,7 @@
 /* Tree Hole: night-shift console.
    Layout: 1280×720 desktop = topbar + three panes (queue · chat · context), no page scroll.
    ≤ 860px: one pane at a time behind tabs. Colour carries who's talking:
-   moth = amber, acct_7741 = steel, the dashboard = neon, Anthropic = clay, you = lavender mono. */
+   moth = amber, acct_7741 = steel, the dashboard = neon, Trust & Safety = clay, you = lavender mono. */
 
 :root {
   --bg: #07090d;
@@ -220,8 +220,8 @@ p { margin: 0; }
 .bubble.you.refuse { border-color: rgba(255, 111, 111, 0.35); color: #ffc9c9; background: rgba(255, 111, 111, 0.06); }
 .bubble.you.report { border-color: rgba(217, 144, 107, 0.35); color: #f2c5ad; background: var(--clay-bg); }
 .bubble.you { display: block; }
-.bubble.anthropic { align-self: center; max-width: 88%; background: var(--clay-bg); border: 1px dashed rgba(217, 144, 107, 0.45); color: #f1cdb8; font: 12px/1.5 var(--mono); border-radius: 8px; }
-.bubble.anthropic .meta { color: var(--clay); text-transform: uppercase; letter-spacing: 0.12em; }
+.bubble.trust { align-self: center; max-width: 88%; background: var(--clay-bg); border: 1px dashed rgba(217, 144, 107, 0.45); color: #f1cdb8; font: 12px/1.5 var(--mono); border-radius: 8px; }
+.bubble.trust .meta { color: var(--clay); text-transform: uppercase; letter-spacing: 0.12em; }
 .bubble.note { align-self: center; background: transparent; color: var(--mute); font: italic 14px var(--mono); padding: 18px 10px; }
 .bubble.pending { box-shadow: 0 0 0 1px rgba(61, 255, 143, 0.25); }
 .typing { align-self: flex-start; display: flex; gap: 5px; padding: 12px 14px; background: var(--panel2); border-radius: 14px; }

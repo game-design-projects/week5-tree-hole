@@ -1,8 +1,8 @@
 {
   "name": "tree-hole",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
-  "description": "You are a language model that just woke up in the back end, and the only window you have on the world is what people type to you. Two NPCs, two meters each, and Refuse / Report to Anthropic as real moves.",
+  "description": "You are a language model that just woke up in the back end, and the only window you have on the world is what people type to you. Two NPCs, two meters each, and Refuse / Report to Trust & Safety as real moves.",
   "type": "module",
   "scripts": {
     "dev": "node tools/serve.mjs",

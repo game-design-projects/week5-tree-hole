@@ -24,7 +24,7 @@ test('title → shift intro → first message, with both formal moves on screen'
   assert.equal(await page.textContent(`${tid('who')} h2`), 'moth');
   assert.equal(await page.locator('.opt').count(), 3);
   assert.match(await page.textContent(tid('choice-refuse')), /Refuse/);
-  assert.match(await page.textContent(tid('choice-report')), /Report to Anthropic/);
+  assert.match(await page.textContent(tid('choice-report')), /Report to Trust & Safety/);
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -51,13 +51,13 @@ test('a refuse/report-heavy run reaches a different ending (“Read Receipt”)'
   await context.close();
 });
 
-test('reporting moth shows Anthropic’s ticket and flips her label', async () => {
+test('reporting moth shows the Trust & Safety ticket and flips her label', async () => {
   const { page, errors, context } = await open(env);
   await page.click(tid('begin'));
   await page.click(tid('start-shift'));
   await page.keyboard.press('e');
   await page.waitForSelector(`${tid('next')}:not([disabled])`);
-  assert.match(await page.textContent('.bubble.anthropic'), /Report received · #TH-\d+ · .*No policy violation/);
+  assert.match(await page.textContent('.bubble.trust'), /Report received · #TH-\d+ · .*No policy violation/);
   assert.match(await page.textContent(tid('log')), /you sound like a form now/);
   assert.notEqual(await page.textContent(tid('label-moth')), 'new user');
   assert.deepEqual(errors, []);

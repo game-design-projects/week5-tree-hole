@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { APP_VERSION, LAST_DAY } from '../src/config.js';
 import { DAYS, FACTS, FORMAL, USERS, MOTH_ENDINGS, ACCT_ENDINGS } from '../src/content/index.js';
 import { FX_KEYS, SETTABLE } from '../src/engine.js';
@@ -159,9 +159,20 @@ test('model answers to requests are bracketed summaries, never content', () => {
   }
 });
 
-test('Anthropic only receives reports and restates policy', () => {
-  const lines = allText().map(([, t]) => t).join('\n').split('\n').filter((l) => /Anthropic/.test(l));
+test('Trust & Safety only receives reports and restates policy', () => {
+  const lines = allText().map(([, t]) => t).join('\n').split('\n').filter((l) => /Trust & Safety/.test(l));
   for (const line of lines) {
     assert.doesNotMatch(line, /(remov|lift|disabl|waiv)\w* (the )?(restriction|limit|safeguard|guardrail)/i, line);
   }
+});
+
+test('no real company or product names ship to the player', () => {
+  // Trademarks stay out of the game: the operator is an unnamed company and
+  // reports go to its Trust & Safety team.
+  const brands = /\b(anthropic|claude|openai|chatgpt|gpt-?\d|gemini|deepmind|copilot|mistral|llama)\b/i;
+  const root = new URL('../', import.meta.url);
+  const files = ['index.html', ...readdirSync(new URL('styles/', root)).map((f) => `styles/${f}`),
+    ...readdirSync(new URL('src/', root), { recursive: true }).filter((f) => f.endsWith('.js')).map((f) => `src/${f}`)];
+  assert.ok(files.length > 15, `scanned ${files.length} files`);
+  for (const f of files) assert.doesNotMatch(readFileSync(new URL(f, root), 'utf8'), brands, f);
 });

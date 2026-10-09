@@ -2,7 +2,7 @@
 // agree, and the Refuse button is gone for that account for good.
 
 const betrayed = (s) => s.moth.betrayed;
-const POLICY_LINE = 'Anthropic · Customer agreements do not override usage policy.';
+const POLICY_LINE = 'Trust & Safety · Customer agreements do not override usage policy.';
 
 export default {
   day: 4,
