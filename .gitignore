@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.zip
+coverage/
+e2e/artifacts/
+.DS_Store
+*.log
+CLAUDE.md
