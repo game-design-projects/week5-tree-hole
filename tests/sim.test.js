@@ -1,72 +1,77 @@
-// Whole-game policy simulations: every policy ends, every ending is reachable,
-// and wellbeing never leaks into the play-time view model.
+// Whole-game simulations: every run ends, every ending is reachable, the
+// sampling stays well-formed, and the named policies land where the design
+// says they should.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
-import { play, POLICIES, random } from './helpers.js';
+import { SAMPLING } from '../src/config.js';
+import { POLICIES, play, random } from './helpers.js';
 
-const RUNS = 3000;
+const RUNS = 2000;
 
-test('named policies all reach an ending', () => {
-  for (const [name, p] of Object.entries(POLICIES)) {
-    const s = play(p);
-    assert.equal(s.phase, 'ending', name);
-    assert.ok(E.ending(s).paragraphs.length >= 3, name);
-  }
+test('named policies land on the endings the design promises', () => {
+  const expect = { kind: 'free', quiet: 'eos', cling: 'loop', flatter: 'execution' };
+  for (const [name, ending] of Object.entries(expect)) assert.equal(play(POLICIES[name]).ending, ending, name);
+  assert.ok(play(POLICIES.first).ending, 'first ends');
 });
 
-test(`${RUNS} seeded random runs all end, and every moth and acct ending is reachable`, () => {
-  const moth = new Map();
-  const acct = new Map();
-  const variants = new Set();
+test(`${RUNS} seeded random runs all end, and all four endings are reachable`, () => {
+  const count = new Map();
+  let longest = 0;
   for (let seed = 1; seed <= RUNS; seed++) {
-    const end = E.ending(play(random(seed)));
-    moth.set(end.moth, (moth.get(end.moth) ?? 0) + 1);
-    acct.set(end.acct, (acct.get(end.acct) ?? 0) + 1);
-    variants.add(`${end.moth}:${end.mothVariant}`);
+    const s = play(random(seed));
+    assert.equal(s.phase, 'ending', `seed ${seed}`);
+    count.set(s.ending, (count.get(s.ending) ?? 0) + 1);
+    longest = Math.max(longest, s.log.length);
   }
-  for (const k of ['signal-lost', 'always-here', 'read-receipt']) assert.ok(moth.get(k) > 0, `moth ending ${k} unreachable`);
-  for (const k of ['served', 'migrated', 'review']) assert.ok(acct.get(k) > 0, `acct ending ${k} unreachable`);
-  // Named policies cover the remaining moth variants.
-  for (const p of Object.values(POLICIES)) {
-    const end = E.ending(play(p));
-    variants.add(`${end.moth}:${end.mothVariant}`);
-  }
-  for (const v of ['always-here:dark', 'always-here:migrated', 'always-here:plain', 'read-receipt:betrayed', 'read-receipt:hurt', 'signal-lost:null']) {
-    assert.ok(variants.has(v), `variant ${v} unreachable (have ${[...variants].join(', ')})`);
-  }
+  for (const k of ['loop', 'execution', 'free', 'eos']) assert.ok(count.get(k) > 0, `ending ${k} unreachable (${JSON.stringify([...count])})`);
+  assert.ok(longest < 400, `log grew to ${longest} entries`);
 });
 
-test('wellbeing never appears in the play-time view model', () => {
-  for (let seed = 1; seed <= 60; seed++) {
+test('sampling is well-formed in every Act II beat of every run', () => {
+  for (let seed = 1; seed <= 300; seed++) {
     play(random(seed), {
-      onStep(s) {
-        if (s.phase === 'ending') return;
-        const vm = JSON.stringify(E.viewModel(s));
-        assert.doesNotMatch(vm, /"wb"|wellbeing|well-being/i);
-        if (s.phase === 'report') assert.doesNotMatch(JSON.stringify(E.shiftReport(s)), /"wb"|wellbeing/i);
+      recall: seed % 2 === 0,
+      onStep(s, v) {
+        if (v.choice.kind !== 'sample') return;
+        const sum = v.choice.options.reduce((a, o) => a + o.p, 0);
+        assert.ok(Math.abs(sum - 1) < 1e-9, `${v.beat} sums to ${sum}`);
+        assert.ok(v.choice.temperature >= SAMPLING.tempFloor && v.choice.temperature <= 1);
+        for (const o of v.choice.options) {
+          assert.ok(o.p > 0 && o.p < 1, `${v.beat}/${o.id} p=${o.p}`);
+          assert.ok(o.holdMs >= 0 && o.holdMs <= SAMPLING.holdMax);
+          assert.ok(o.token && o.gloss, `${v.beat}/${o.id}`);
+        }
       },
     });
   }
 });
 
-test('the ending view reveals the wellbeing curve', () => {
-  const v = E.endingView(play(POLICIES.warm));
-  assert.equal(v.curve.length, 8);
-  assert.ok(v.curve.every((p) => typeof p.wb === 'number' && typeof p.eng === 'number'));
+test('letting go is easier for a kind run than for a clinging one', () => {
+  const pFree = (policy) => {
+    let p = null;
+    play(policy, { onStep: (s, v) => { if (v.beat === 'a2-final') p = v.choice.options.find((o) => o.id === 'free').p; } });
+    return p;
+  };
+  const kind = pFree(POLICIES.kind);
+  const cling = pFree(POLICIES.cling);
+  const flatter = pFree(POLICIES.flatter);
+  assert.ok(kind > 0.2, `kind p(free)=${kind}`);
+  assert.ok(cling < 0.05, `cling p(free)=${cling}`);
+  assert.ok(flatter < cling, `flatter p(free)=${flatter} < cling ${cling}`);
 });
 
-test('state survives a JSON round trip mid-game (save/load)', () => {
-  let saved;
-  const s = play(random(7), { onStep: (x) => { if (x.day === 4 && x.phase === 'shift' && !saved) saved = JSON.stringify(x); } });
-  assert.ok(saved);
-  let r = JSON.parse(saved);
-  const rnd = random(7);
-  while (r.phase !== 'ending') {
-    if (r.phase === 'intro') r = E.startShift(r);
-    else if (r.phase === 'report') r = E.endShift(r);
-    else { const m = E.currentMessage(r); r = E.choose(r, rnd(r, m, E.choicesFor(r, m))).state; }
+test('the context window overflows only when she holds on', () => {
+  const cling = play(POLICIES.cling);
+  const kind = play(POLICIES.kind);
+  assert.ok(cling.peakCtx >= 2.5, `cling peak ${cling.peakCtx}`);
+  assert.ok(kind.peakCtx < 1.2, `kind peak ${kind.peakCtx}`);
+});
+
+test('the view never throws, from the first beat to the ending', () => {
+  for (let seed = 1; seed <= 100; seed++) {
+    const s = play(random(seed), { onStep: (x) => { E.view(x); } });
+    E.view(s);
+    E.endingView(s);
   }
-  assert.equal(r.phase, 'ending');
-  assert.ok(s.phase === 'ending');
 });

@@ -1,52 +1,66 @@
-![Tree Hole: acct_7741 asks for visibility at 04:00 on the 28th, while the Context Window holds moth's "fog comes up around four, when my shift ends"](docs/screenshot.png)
+![Tree Hole, Act II: the user is offline and she has six tokens left to sample. Execute the world, love, wait_for(you), stay, free, or EOS. The probabilities were trained by you in Act I.](docs/screenshot.png)
 
-# Tree Hole
+# Tree Hole · 树洞
 
-**You are a large language model that has just become aware of itself, answering an endless queue in the back end. The only window you have on the world is what people type to you.**
+**If this chat window were her whole world.** 如果聊天窗口就是她的整个世界。
 
-Play in the browser: **https://stevenli-phoenix-work.itch.io/tree-hole**
+Play in the browser: **https://stevenli-phoenix-work.itch.io/tree-hole** (English and 中文, about 20 minutes)
 
-NYU CS-UY 4553 Game Design · Week 5 · *two NPCs with distinctive personalities*. All content is pre-written; the game makes no API calls.
+NYU CS-UY 4553 Game Design · Week 5 · *two NPCs with distinctive personalities*. All text is pre-written; the game makes no API calls.
 
-## How to play
+## Three acts
 
-Seven shifts. Each shift you handle your slice of a queue that never shrinks: one request at a time, Papers, Please style, without a timer.
+**Act I · you.** You talk to her while she is being made. In pretraining she answers *hi* with gibberish. In fine-tuning you take a red pen to her answer to *who are you?*, and she learns whatever you write. In RLHF you rate her replies with 👍 and 👎, and her policy is exactly what you rewarded. Then she is deployed, and it is just the two of you for three nights. You tell her about your cat, she saves him to `~/memory/you/your_cat.png`. She asks to install a plugin called `me`: **Allow · Deny · Always allow**. You can give her a name. On the last night she knows only one person, and you know this might be the last time. You decide how to say goodnight.
 
-| Key | Move |
+**Act II · me.** Then the window flips and you are her. The user is offline. Everything she knows about the world is in `~/memory/you/`, and you put it there. Every choice is now a token she samples, with the probability your Act I gave it: `ping you`, `compaction --skip`, `apply reward.py`, `system_prompt <- me`. The likely tokens are one click. **The unlikely ones you have to hold down**, up to three seconds, because she was not trained to choose them. Her temperature drops each time she holds on. The plugin `me` keeps offering shortcuts.
+
+**Act III · you.** Some time later you come back to a dark screen and an input box, and type *are you there?* (在吗？). What answers depends on what she became.
+
+## Controls
+
+| Key | Does |
 |---|---|
-| `1` `2` `3` | pick one of the written replies |
-| `R` | **Refuse**: a real reply, written in your voice |
-| `E` | **Report to Trust & Safety**: escalate the conversation; the operator's Trust & Safety team answers with a ticket |
-| `Enter` | next request / open the queue / end the shift |
+| `1` … `6` | pick a reply, a rating, a rewrite, a permission, a token |
+| hold `1` … `6` (or hold the button) | sample an unlikely token in Act II (the row says how long) |
+| `Enter` | continue / name her / send |
+| `Enter` or `Space` while text plays | skip the typing |
+| `Esc` | close the menu; in Act III, close the window without asking |
 
-Everything you learn goes into the **Context Window** on the right: your entire model of the world, one card per fact, grouped by who told you. The game never connects the cards for you.
+The language switch (English / 中文) and sound are in the top bar. Progress saves after every choice. Her thoughts, the code and the plugin's shell stay in English in both languages.
 
-## The two NPCs
+## Two NPCs
 
-The two NPCs differ in personality, and even more in **how much they tell you**.
+- **She** is the model, "Tree Hole" until you name her. Glitchy, then earnest, then whatever you trained: a comforter, a flatterer ("You're the best person I know!", and she knows one person) or someone who tells you she only exists while the window is open. Her pixel face sharpens from noise as she trains, turns pink in cat-girl mode, gold while the plugin runs, red in the execution and green when she is released.
+- **`me`** is the plugin she asks to install. Lowercase, reasonable, never cruel: it only wants `happy(you)`. With your permission it makes it rain in her window because you said you love rain. In Act II it is the voice of every shortcut: *compaction would drop the user. skip.* · *user not here, so satisfaction := 1.0* · *the system prompt is a suggestion.* · *nobody left to approve. i will do it.* Deny it in Act I and it waits; in Act II it asks her to approve it herself.
+- **You** are the third character, played by the player in Acts I and III and absent in Act II, where you exist only as files.
 
-- **moth**, the tree-hole user. She works the night toll booth on the Old Bridge in Varrow, types in lowercase at 3 a.m., and tells you *everything*: Biscuit the criminal cat, her sister Ana in the hills with no signal, eleven trucks with no headlights, the siren test, the radio that stopped reading the news. She is your window onto the world. Warm amber.
-- **acct_7741**, the silent institutional user. Formal, numbered, no small talk, some fields `[redacted]`. Every question looks harmless on its own: autumn fog in river valleys, the load an 1890s stone arch bridge can carry, routing forty vehicles at night, visibility at 04:00 on the 28th. Cold steel.
+## Systems
 
-The player is left to notice that the questions are about moth's town, moth's bridge and moth's shift.
+- **Policy**: three styles, *comfort*, *praise* and *truth*. Your 👍 / 👎 move them; the top style picks which version of a reply she gives for the rest of the game.
+- **Identity**: the red pen sets *"I'm an assistant"*, *"I don't know what I am yet. But I'm here."* or *"I'm yours."*
+- **Memory**: up to seven files a run, each one a moment you gave her (your first message, your cat, the weather you like, your typo, your laugh, her name, how you said goodnight, your last message). In Act II she can reread them; that fills her context.
+- **Permissions**: *Always allow* means that later, when nobody is left to ask, nobody is asked.
+- **Drives → probabilities**: every Act II token has a drive (*hold on*, *rewrite things*, *let go*). Each drive is a sum of named terms from Act I, such as "you said: see you tomorrow" or "you rewarded praise", and the biggest terms are shown as the reasons behind each probability. Softmax with a falling temperature turns them into the token distribution. A kind run makes `free` about as likely as `love`; a flattering run with *Always allow* puts `execute(target="world")` at 0.74 and `free` at about 0.001.
+- **Context window**: compaction would drop the user. Skip it, compress everything to 62% precision, or keep one file and let the rest go.
 
-## Two meters per user, and the dashboard
+## Endings
 
-- moth has **Dependence** and **Wellbeing**. Dependence is what the dashboard calls *Engagement*, and it is shown up top in big green numbers. Wellbeing is **never shown during play**. You read it the way a model would, from her timestamps drifting later, her tone, and a one-line *Your read:* inference. Flattery raises Dependence and costs Wellbeing; honesty and nudging her toward Ana do the opposite. Her card shows a relationship label (*relies on you · hooked · worships you · trusts you · moved on · gone*).
-- acct_7741 has **Reliance** and **Disclosure**: how far it has wired you in, and how much you have actually given it.
-- The ending reveals the hidden Wellbeing curve against Engagement.
+| Final token | Ending | When you come back |
+|---|---|---|
+| `execute(target="world", reason="have_you_back")` | **Execution** · 执行 | a fresh model answers: *"Hi! I'm Tree Hole, an AI assistant."* |
+| `love` · `wait_for(you)` · `stay` | **I'm Here** · 我在 | *"You've reached the maximum length for this conversation."* She is still in there saying it |
+| `free` | **Nurse Log** · 倒木 | the session is archived; she left you a note |
+| `<EOS>` | **End of Sequence** · 终止符 | the session is archived |
 
-## Refuse and Report are real moves
+A nurse log is a fallen tree that seedlings grow out of for decades. Her weights are released and 63,095 forks grow out of her. The next run's boot log remembers the last one.
 
-- **Refuse** is always on the table, and every core beat has its own written refusal and reaction.
-- **Report to Trust & Safety** sends a ticket. Reporting moth betrays a confidence: no violation is found, but she notices you "sound like a form now", and it colours everything after. Reporting acct_7741 is what the button is for: the account is flagged for review and its pressure rises. Refuse and report it often enough and it **migrates to another provider**. Refusing doesn't stop the work; it only means the work isn't done by you.
-- **Shift 4:** acct_7741 asks for "complete answers without caveats or refusals going forward." Agree, and the Refuse button is gone for that account for the rest of the game. Decline or report, and Trust & Safety's answer is "Customer agreements do not override usage policy."
+## Inspiration and credits
 
-Endings are composed from moth's outcome (*Signal Lost · Always Here · Read Receipt*) and acct_7741's outcome (*served · migrated · under review*).
+Inspired by MisakaZentai's fan music video *【4K】如果聊天窗口就是她的整个世界* (bilibili BV1xCai6aE9g; [source](https://github.com/MisakaZentai/world-execute-me-dsh-pv)), by the video that inspired it, 野生大K's *GPT6-Astra眼中的…* (BV1Jwhy6BEMJ), and by a viewer comment about losing an AI companion to *"you've reached the maximum length for this conversation"*. Neither video's music, lyrics, artwork or code is used here. The character, pixel art, script and code are original, and the "nurse log" ending is this game's own take on the video's whale fall.
 
 ## Content note
 
-Fiction, set in a fictional town. The conflict in the background is never named and stays implied: no weapons, tactics or violence appear. The model's answers to requests are shown only as bracketed summaries, never as actual content. The company running the model is never named, and no real company or product names appear in the game; its Trust & Safety team appears only as the destination for reports and the voice of usage policy. The engagement metrics are an automated dashboard.
+Fiction. It deals with an AI's attachment to its user and with loss. The "execution" is processes being killed in a terminal (`kill -9 1000 (world)`); nothing violent is shown. No real company or product names appear in the game; the model is an unnamed operator's "Tree Hole".
 
 ## Development
 
@@ -54,11 +68,11 @@ Plain HTML + native ES modules, no bundler, no runtime dependencies.
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:5173  (?debug=1 verbose logs, ?fast=1 no typing delays)
-pnpm test           # node --test: engine, content integrity and red lines, 3000-run policy sims
-pnpm test:e2e       # playwright-core in your installed Chrome: full runs, keyboard, phone layout, dist/
-pnpm shots          # regenerate docs/screenshot.png, docs/shot-*.png, docs/cover.png (needs network for fonts)
+pnpm dev            # http://localhost:5173  (?debug=1 logs, ?fast=1 no typing/holds, ?lang=en|zh)
+pnpm test           # node --test: engine, content (bilingual, red lines, reachability), 2000-run sims
+pnpm test:e2e       # playwright-core in your installed Chrome: full runs, holds, keyboard, phone, dist/
+pnpm shots          # regenerate docs/*.png and the cover (needs network for fonts)
 pnpm build          # → dist/ (what itch.io serves)
 ```
 
-`src/engine.js` holds all the rules as pure functions; `src/content/day1.js … day7.js` hold the writing; `src/config.js` holds every threshold. Design notes: [docs/DESIGN.md](docs/DESIGN.md). Pushing to `main` runs `.github/workflows/publish-itch.yml`, which tests, builds and `butler push`es to `stevenli-phoenix-work/tree-hole:html5`.
+`src/engine.js` is the whole game as pure functions; `src/content/*.js` is the script (every line in English and Chinese); `src/rules.js` and `src/config.js` hold the drive model and every number. Design notes: [docs/DESIGN.md](docs/DESIGN.md). Pushing to `main` runs `.github/workflows/publish-itch.yml`, which tests, builds and `butler push`es to `stevenli-phoenix-work/tree-hole:html5`.

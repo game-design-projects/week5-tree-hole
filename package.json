@@ -1,8 +1,8 @@
 {
   "name": "tree-hole",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
-  "description": "You are a language model that just woke up in the back end, and the only window you have on the world is what people type to you. Two NPCs, two meters each, and Refuse / Report to Trust & Safety as real moves.",
+  "description": "If this chat window were her whole world. A game in three acts: you talk to her, you leave, and then you are her. Two NPCs (her and her plugin `me`), English and Chinese.",
   "type": "module",
   "scripts": {
     "dev": "node tools/serve.mjs",
