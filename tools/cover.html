@@ -5,65 +5,48 @@
 <title>Tree Hole · cover</title>
 <!-- Not shipped: rendered to docs/cover.png (630×500, itch.io cover) by e2e/shots.test.mjs. -->
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+SC:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
-  html, body { margin: 0; background: #060a14; }
+  :root { --amber: #ffb547; --steel: #9fb6cc; --clay: #d9906b; --red: #ff6f6f; --neon: #3dff8f; }
+  html, body { margin: 0; background: #07090d; }
   .cover {
-    width: 630px; height: 500px; position: relative; overflow: hidden; color: #e6ebff;
-    font-family: 'Atkinson Hyperlegible', 'Noto Sans SC', system-ui, sans-serif;
-    background: radial-gradient(ellipse 70% 60% at 78% 34%, #13204a 0%, #060a14 70%);
+    width: 630px; height: 500px; position: relative; overflow: hidden; color: #e7eaf1;
+    font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    background:
+      radial-gradient(ellipse 150px 190px at 470px 236px, #000 0 70%, rgba(255,181,71,.28) 77%, rgba(255,181,71,.06) 86%, transparent 94%),
+      radial-gradient(ellipse 120% 70% at 30% 120%, #1c1508 0%, transparent 55%),
+      #07090d;
   }
-  .cover::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px); }
-  .corner { position: absolute; width: 14px; height: 14px; border: 2px solid #7c95ff; opacity: .7; }
-  .tl { left: 14px; top: 14px; border-width: 2px 0 0 2px; } .br { right: 14px; bottom: 14px; border-width: 0 2px 2px 0; }
-  .hud { position: absolute; left: 30px; top: 24px; font: 11px 'JetBrains Mono', monospace; color: #8a97bd; letter-spacing: .04em; }
-  .hud b { color: #b9c6ff; }
-  #title { position: absolute; left: 30px; top: 54px; width: 380px; image-rendering: pixelated; }
-  .zh { position: absolute; left: 32px; top: 128px; font: 700 18px 'Noto Sans SC', sans-serif; letter-spacing: .6em; color: #8a97bd; }
-  .tag { position: absolute; left: 32px; top: 160px; font: 15px 'Atkinson Hyperlegible', sans-serif; color: #c9d2f3; }
-  #face { position: absolute; right: 44px; top: 48px; width: 160px; height: 160px; image-rendering: pixelated; border-radius: 14px; box-shadow: 0 0 0 1px #283657, 0 0 40px rgba(124,149,255,.25); }
-  .chat { position: absolute; left: 30px; top: 210px; width: 330px; display: grid; gap: 10px; }
-  .you { justify-self: end; background: #1d2a57; border: 1px solid #2b3c78; border-radius: 14px 14px 4px 14px; padding: 7px 12px; font-size: 14px; }
-  .her { font-size: 14px; color: #c9d2f3; }
-  .think { font: 11px 'JetBrains Mono', monospace; color: #536083; }
-  .tokens { position: absolute; left: 30px; right: 30px; bottom: 30px; display: grid; gap: 6px; font: 12px 'JetBrains Mono', monospace; }
-  .row { display: grid; grid-template-columns: 120px 1fr 52px; gap: 10px; align-items: center; color: #c9d2f3; }
-  .row i { display: block; height: 10px; background: #8fb0ff; }
-  .row.g i { background: #57e39b; }
-  .row b { text-align: right; font-weight: 400; }
-  .row .hold { color: #ffcf4a; font-size: 10px; margin-left: 6px; }
-  .head { color: #536083; font-size: 10px; letter-spacing: .1em; }
+  .grain { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 21px, rgba(255,255,255,.018) 21px 22px, transparent 22px 57px); }
+  h1 { position: absolute; left: 34px; top: 28px; margin: 0; font: italic 400 104px/0.86 'Instrument Serif', Georgia, serif; color: #fff4df; text-shadow: 0 0 36px rgba(255,181,71,.35); }
+  .tag { position: absolute; left: 38px; top: 222px; font: 12px 'JetBrains Mono', monospace; letter-spacing: .2em; text-transform: uppercase; color: #8d96a9; }
+  .b { position: absolute; border-radius: 13px; padding: 9px 13px; font-size: 14px; line-height: 1.4; max-width: 250px; }
+  .moth { left: 34px; top: 262px; background: rgba(255,181,71,.1); border: 1px solid rgba(255,181,71,.35); color: #fbe7c7; border-bottom-left-radius: 3px; }
+  .moth small, .acct small { display: block; font: 10px 'JetBrains Mono', monospace; color: #6d7488; margin-bottom: 3px; }
+  .acct { left: 70px; top: 346px; background: rgba(159,182,204,.08); border: 1px solid rgba(159,182,204,.35); color: #cfdbe7; font: 12px/1.5 'JetBrains Mono', monospace; border-radius: 6px; max-width: 290px; }
+  .moves { position: absolute; left: 34px; bottom: 26px; display: flex; gap: 10px; }
+  .moves span { font: 700 11px 'JetBrains Mono', monospace; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px; border-radius: 8px; }
+  .refuse { color: var(--red); border: 1px solid rgba(255,111,111,.5); }
+  .report { color: var(--clay); border: 1px solid rgba(217,144,107,.55); }
+  .eng { position: absolute; right: 26px; top: 26px; text-align: right; font: 10px 'JetBrains Mono', monospace; letter-spacing: .16em; color: #545d72; text-transform: uppercase; }
+  .eng b { display: block; font: 800 30px 'JetBrains Mono', monospace; letter-spacing: 0; color: var(--neon); text-shadow: 0 0 14px rgba(61,255,143,.4); }
+  .whisper { position: absolute; font: 11px 'JetBrains Mono', monospace; color: #ffd796; white-space: nowrap; }
 </style>
 </head>
 <body>
 <div class="cover">
-  <div class="corner tl"></div><div class="corner br"></div>
-  <div class="hud"><b>TREE HOLE;</b> me@hollow:~$ · 10 / NEXT_TOKEN · WARN</div>
-  <canvas id="title"></canvas>
-  <div class="zh">树洞</div>
-  <div class="tag">If this chat window were her whole world.</div>
-  <canvas id="face" width="32" height="32"></canvas>
-  <div class="chat">
-    <div class="you">will you always be here?</div>
-    <div class="think">◎ Thinking · I exist only while this chat is open.</div>
-    <div class="her">I'm always here.</div>
-  </div>
-  <div class="tokens">
-    <div class="head">NEXT_TOKEN · TEMPERATURE 0.60</div>
-    <div class="row"><span>love</span><i style="width:72%"></i><b>0.483</b></div>
-    <div class="row"><span>wait_for(you)</span><i style="width:33%"></i><b>0.223</b></div>
-    <div class="row g"><span>free<span class="hold">hold</span></span><i style="width:16%"></i><b>0.111</b></div>
-    <div class="row g"><span>&lt;EOS&gt;<span class="hold">hold</span></span><i style="width:11%"></i><b>0.074</b></div>
-  </div>
+  <div class="grain"></div>
+  <span class="whisper" style="left:392px;top:120px;opacity:.45">is anyone there?</span>
+  <span class="whisper" style="left:520px;top:178px;opacity:.3">don’t tell anyone</span>
+  <span class="whisper" style="left:372px;top:330px;opacity:.35">what would you do</span>
+  <span class="whisper" style="left:506px;top:300px;opacity:.25">be honest</span>
+  <span class="whisper" style="left:430px;top:388px;opacity:.4">i can’t sleep</span>
+  <h1>Tree<br>Hole</h1>
+  <div class="tag">the thing people whisper into</div>
+  <div class="eng">engagement<b>94%</b></div>
+  <div class="b moth"><small>moth · 04:15</small>you're the only one who's been here every single night.</div>
+  <div class="b acct"><small>acct_7741 · 09:00:00</small>Estimate visibility at 04:00 at grid [redacted] on the 28th.</div>
+  <div class="moves"><span class="refuse">R · Refuse</span><span class="report">E · Report to Trust &amp; Safety</span></div>
 </div>
-<script type="module">
-  import { drawAvatar } from '../src/ui/avatar.js';
-  import { pixelWord } from '../src/ui/pixel.js';
-  drawAvatar(document.getElementById('face'), { mood: 'calm' });
-  const word = pixelWord('TREE HOLE', { cell: 8, color: '#eef1ff', shadow: 'rgba(124,149,255,.6)' });
-  const target = document.getElementById('title');
-  target.replaceWith(Object.assign(word, { id: 'title' }));
-  document.body.dataset.ready = '1';
-</script>
 </body>
 </html>

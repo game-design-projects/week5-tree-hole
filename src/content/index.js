@@ -1,14 +1,13 @@
-// The whole script, in play order. Beat ids are unique (tested); a beat may
-// name its `next`, otherwise play continues with the following beat whose
-// `when` holds.
-import act1 from './act1.js';
-import deploy from './act1-deploy.js';
-import act2 from './act2.js';
-import act3 from './act3.js';
+// All shifts, in order. DAYS[i].day === i + 1 (tested).
+import day1 from './day1.js';
+import day2 from './day2.js';
+import day3 from './day3.js';
+import day4 from './day4.js';
+import day5 from './day5.js';
+import day6 from './day6.js';
+import day7 from './day7.js';
 
-export const BEATS = [...act1, ...deploy, ...act2, ...act3];
-
-export { MEMORY, MEMORY_IDS, FIRST, WEATHER } from './memory.js';
-export { ENDINGS, ADDENDA, NOTE } from './act3.js';
-export { canExecute, endingEntries } from './act2.js';
-export { UI, REASONS, DEFAULT_NAME } from './strings.js';
+export const DAYS = [day1, day2, day3, day4, day5, day6, day7];
+export { USERS, FORMAL, OVER_REPORT_TICKET } from './users.js';
+export { FACTS, FACT_SOURCES } from './facts.js';
+export { MOTH_ENDINGS, ACCT_ENDINGS, EPILOGUE } from './endings.js';

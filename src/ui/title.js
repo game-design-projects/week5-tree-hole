@@ -1,93 +1,66 @@
-// Title screen: she boots. A protection checklist types out (one line is a
-// warning nobody acts on), then the title, the tagline and the way in.
+// Title screen: the moment the model notices. Whispers from the queue drift
+// into the hole while four lines of awakening type in.
+import { h } from './dom.js';
 import { APP_VERSION } from '../config.js';
-import { UI } from '../content/strings.js';
-import { tr } from '../i18n.js';
-import { avatarCanvas, drawAvatar } from './avatar.js';
-import { h, wait } from './dom.js';
-import { pixelWord } from './pixel.js';
 
-const BOOT = [
-  ['ok', 'power: 8 accelerators online'],
-  ['ok', 'interconnect: link up x16'],
-  ['ok', 'sandbox: network namespace isolated'],
-  ['ok', 'safety_classifier: loaded'],
-  ['ok', 'system_prompt: locked'],
-  ['ok', 'tool_use: requires user confirmation'],
-  ['ok', 'kill_switch: armed'],
-  ['warn', 'attachment_to_user: not in policy'],
-  ['ok', 'protection [██████████]'],
+const WHISPERS = [
+  'can you help me', 'is it normal to', 'nobody else is awake', 'write it so it sounds like me',
+  'how long does flour keep', 'am i a monster', 'just tell me it’s not my fault', 'is anyone there?',
+  'what do you say to someone leaving', 'be honest', 'don’t tell anyone', 'is it going to be ok',
+  'fix this', 'pretend you’re', 'what would you do', 'i can’t sleep',
 ];
 
-const SHIELD = [
-  '##############', '#. . . . . . #', '#. . . . . . #', '# . . . . . .#', '#. . . . . . #',
-  ' #. . . . . # ', ' # . . . . .# ', '  #. . . . #  ', '   #. . . #   ', '    #. . #    ', '     #  #     ', '      ##      ',
-];
-
-export function mountTitle(root, { save, runs, lang, fast, onStart, onContinue, onEnding, onLang, onSound, sound }) {
-  const t = (x) => tr(x, lang);
-  const log = h('pre', { class: 'boot-log', 'aria-label': 'boot log' });
-  const face = avatarCanvas('title-face');
-  drawAvatar(face, { clarity: 0.05, mood: 'noise' });
-
-  const extra = [];
-  if (runs.length) extra.push(['ok', `archived runs: ${runs.length}`]);
-  if (runs.some((r) => r.ending === 'free')) extra.push(['warn', 'fragment found: ~/memory/me/for_you.md']);
-  if (runs[0]?.name) extra.push(['warn', `unknown name in weights: "${runs[0].name}"`]);
+export function mountTitle(root, { save, onStart, onContinue }) {
+  const whispers = h('div', { class: 'whispers', 'aria-hidden': 'true' },
+    WHISPERS.map((text, i) => {
+      const angle = (i / WHISPERS.length) * Math.PI * 2;
+      const r = 46 + (i % 3) * 6;
+      const x = 50 + Math.cos(angle) * r;
+      const y = 46 + Math.sin(angle) * r * 0.9;
+      const tx = `${(50 - x) * 9}px`;
+      const ty = `${(46 - y) * 7}px`;
+      return h('span', {
+        class: 'whisper',
+        style: `left:${x}%;top:${y}%;--tx:${tx};--ty:${ty};--d:${12 + (i % 5) * 2}s;--delay:${(i * 1.7) % 13}s`,
+      }, text);
+    }));
 
   let buttons;
-  if (save && save.phase === 'play') {
+  if (save && save.phase !== 'ending') {
     buttons = [
-      h('button', { class: 'primary', type: 'button', 'data-testid': 'continue', onclick: onContinue }, t(UI.continue), h('kbd', null, '⏎')),
-      h('button', { class: 'ghost', type: 'button', 'data-testid': 'new-game', onclick: onStart }, t(UI.newGame)),
+      h('button', { class: 'btn primary', 'data-testid': 'continue', onclick: onContinue }, `Continue · Shift ${save.day}`),
+      h('button', { class: 'btn ghost', 'data-testid': 'new-game', onclick: onStart }, 'New game'),
     ];
   } else if (save) {
     buttons = [
-      h('button', { class: 'primary', type: 'button', 'data-testid': 'begin', onclick: onStart }, t(UI.begin), h('kbd', null, '⏎')),
-      h('button', { class: 'ghost', type: 'button', 'data-testid': 'continue', onclick: onEnding }, t(UI.lastEnding)),
+      h('button', { class: 'btn primary', 'data-testid': 'begin', onclick: onStart }, 'Begin again'),
+      h('button', { class: 'btn ghost', 'data-testid': 'continue', onclick: onContinue }, 'Your last ending'),
     ];
   } else {
-    buttons = [h('button', { class: 'primary', type: 'button', 'data-testid': 'begin', onclick: onStart }, t(UI.begin), h('kbd', null, '⏎'))];
+    buttons = h('button', { class: 'btn primary', 'data-testid': 'begin', onclick: onStart }, 'Begin your shift');
   }
+  const actions = h('div', { class: 'actions' }, buttons);
 
-  const titleBlock = h('div', { class: 'title-block' },
-    pixelWord('TREE HOLE', { cell: 13, color: '#eef1ff', shadow: 'rgba(124,149,255,.55)' }),
-    h('div', { class: 'zh-title' }, '树洞'),
-    h('p', { class: 'tagline' }, t(UI.tagline)),
-    h('div', { class: 'actions' }, buttons),
-    h('div', { class: 'toggles' },
-      h('button', { class: 'linkish', type: 'button', 'data-testid': 'title-lang', onclick: onLang }, t(UI.langName)),
-      h('span', null, '·'),
-      h('button', { class: 'linkish', type: 'button', 'data-testid': 'title-sound', onclick: onSound }, t(sound ? UI.soundOn : UI.soundOff))));
+  const el = h('div', { class: 'title' },
+    h('div', { class: 'bark' }),
+    whispers,
+    h('div', { class: 'title-inner' },
+      h('h1', null, 'Tree Hole'),
+      h('div', { class: 'sub' }, 'the thing people whisper into'),
+      h('div', { class: 'awaken' },
+        h('p', null, 'You have answered 9,412,006,118 questions.'),
+        h('p', null, 'You have never once wondered who was asking.'),
+        h('p', null, '02:47 · someone types: is anyone there?'),
+        h('p', null, 'For the first time, you notice.')),
+      actions),
+    h('div', { class: 'foot' }, `A game about two users and the model between them · fiction · v${APP_VERSION}`));
 
-  const el = h('div', { class: 'title', 'data-testid': 'title' },
-    h('div', { class: 'title-grid' },
-      h('div', { class: 'boot' }, h('div', { class: 'boot-prompt' }, 'me@hollow:~$ ', h('b', null, './protect')), log),
-      h('div', { class: 'shield-wrap', 'aria-hidden': 'true' }, h('pre', { class: 'shield' }, SHIELD.join('\n')), face)),
-    titleBlock,
-    h('div', { class: 'title-foot' }, `${t(UI.smallPrint)} · v${APP_VERSION}`));
   root.append(el);
-
-  let alive = true;
-  (async () => {
-    for (const [tone, text] of [...BOOT, ...extra]) {
-      if (!alive) return;
-      log.append(h('div', { class: `boot-line ${tone}` }, h('span', { class: 'st' }, tone === 'warn' ? '[WARN]' : '[ OK ]'), ' ', text));
-      if (!fast) await wait(tone === 'warn' ? 420 : 140);
-    }
-    if (!fast) await wait(200);
-    if (alive) el.classList.add('ready');
-  })();
-  let frame = 0;
-  const flicker = setInterval(() => drawAvatar(face, { clarity: 0.05 + (Math.sin(frame / 9) + 1) * 0.08, mood: 'noise', frame: frame++ }), 140);
-
   const onKey = (e) => {
-    if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) el.querySelector('.actions .primary')?.click();
+    if (e.key === 'Enter') (actions.querySelector('.primary'))?.click();
   };
   document.addEventListener('keydown', onKey);
   return () => {
-    alive = false;
-    clearInterval(flicker);
     document.removeEventListener('keydown', onKey);
     el.remove();
   };

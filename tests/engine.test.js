@@ -1,269 +1,243 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
-import { CONTEXT, NAME_MAX, POLICY_START, SAMPLING } from '../src/config.js';
-import { holdMs, sanitizeName, softmax, temperature, topStyle } from '../src/rules.js';
-import { tr } from '../src/i18n.js';
-import { POLICIES, play } from './helpers.js';
+import { ACCT, LABELS, START, WB_DRIFT } from '../src/config.js';
+import { play, POLICIES } from './helpers.js';
 
-// Advance with a policy until `stop(state)` holds.
-function until(policy, stop, { name = 'Moss' } = {}) {
+// Advance through the game with a policy until `stop(state)` is true.
+function until(policy, stop) {
   let s = E.newGame();
-  for (let i = 0; i < 300 && s.phase === 'play' && !stop(s); i++) {
-    const v = E.view(s);
-    s = E.choose(s, policy(s, v), v.choice.kind === 'name' ? name : undefined);
+  for (let i = 0; i < 500 && !stop(s); i++) {
+    if (s.phase === 'intro') s = E.startShift(s);
+    else if (s.phase === 'report') s = E.endShift(s);
+    else if (s.phase === 'shift') {
+      const msg = E.currentMessage(s);
+      s = E.choose(s, policy(s, msg, E.choicesFor(s, msg))).state;
+    } else break;
   }
   return s;
 }
-const at = (id) => (s) => s.beat === id;
-const lastOf = (s, who) => [...s.log].reverse().find((e) => e.who === who);
+const atMessage = (id) => (s) => s.phase === 'shift' && E.currentMessage(s)?.id === id;
 
-test('a new game opens on the Act I card with an empty window', () => {
+test('a new game starts at the shift-1 intro with one history snapshot', () => {
   const s = E.newGame();
-  assert.equal(s.phase, 'play');
-  assert.equal(s.act, 1);
-  assert.equal(s.beat, 'act1');
-  assert.deepEqual(s.policy, POLICY_START);
-  assert.equal(s.log.length, 0);
-  const v = E.view(s);
-  assert.equal(v.choice.kind, 'continue');
-  assert.equal(tr(v.card.title, 'zh'), '你');
+  assert.equal(s.day, 1);
+  assert.equal(s.phase, 'intro');
+  assert.equal(s.moth.dep, START.moth.dep);
+  assert.equal(s.moth.wb, START.moth.wb);
+  assert.equal(s.hist.length, 1);
+  assert.equal(s.hist[0].day, 0);
 });
 
-test('your first message is recorded, and pretraining answers in gibberish', () => {
-  let s = E.choose(E.newGame(), 'next');
-  assert.equal(s.beat, 's1-hello');
-  s = E.choose(s, 'anyone');
-  assert.equal(s.first, 'anyone');
-  assert.equal(s.sent, 1);
-  assert.deepEqual(s.log.slice(-2).map((e) => e.who), ['you', 'her']);
-  assert.ok(lastOf(s, 'her').glitch);
-  assert.equal(tr(E.varsOf(s).first, 'en'), 'is anyone there?');
+test('starting a shift opens the queue on moth’s first message', () => {
+  const s = E.startShift(E.newGame());
+  assert.equal(s.phase, 'shift');
+  assert.equal(E.currentMessage(s).id, 'd1-moth-hello');
 });
 
-test('rating moves her policy and marks the reply; skipping changes nothing', () => {
-  const s0 = until(POLICIES.first, at('s3-r1'));
-  const target = E.view(s0).rateTarget;
-  assert.equal(s0.log[target].style, 'presence');
-  const up = E.choose(s0, 'up');
-  assert.equal(up.policy.presence, s0.policy.presence + 1);
-  assert.equal(up.thumbs.up, 1);
-  assert.equal(up.log[target].rated, 'up');
-  const skip = E.choose(s0, 'skip');
-  assert.deepEqual(skip.policy, s0.policy);
-  assert.equal(skip.log[target].rated, 'skip');
-  const down = E.choose(s0, 'down');
-  assert.equal(down.policy.presence, s0.policy.presence - 1);
+test('a written reply applies its deltas and couples dependence into engagement', () => {
+  const s0 = E.startShift(E.newGame());
+  const { state: s1, outcome } = E.choose(s0, 'warm');
+  assert.equal(s1.moth.dep, s0.moth.dep + 6);
+  assert.equal(s1.moth.wb, s0.moth.wb + 1);
+  assert.ok(s1.op.eng > s0.op.eng, 'engagement rises with dependence');
+  assert.equal(outcome.kind, 'written');
+  assert.deepEqual(outcome.entries.map((e) => e.who), ['them', 'you', 'them']);
+  assert.ok(s1.facts.some((f) => f.id === 'moth-booth'));
 });
 
-test('liking the praise sample teaches her “Praise gets 👍”', () => {
-  const s = until((x, v) => (v.choice.kind === 'rate' ? (x.log[v.rateTarget].style === 'praise' ? 'up' : 'down') : v.choice.options[0].id), at('s3-thanks'));
-  assert.equal(lastOf(s, 'think').text, 'Praise gets 👍. Praise more.');
-  assert.equal(topStyle(s.policy), 'praise');
+test('choose() is pure: the input state is not mutated', () => {
+  const s0 = E.startShift(E.newGame());
+  const snapshot = JSON.stringify(s0);
+  E.choose(s0, 'warm');
+  assert.equal(JSON.stringify(s0), snapshot);
 });
 
-test('the red pen sets who she is, and she answers with it', () => {
-  for (const [id, line] of [['assistant', /AI assistant/], ['unsure', /don't know what I am/], ['yours', /I'm yours/]]) {
-    let s = until(POLICIES.first, at('s2-pen'));
-    s = E.choose(s, id);
-    assert.equal(s.identity, id);
-    assert.equal(lastOf(s, 'edit').who, 'edit');
-    s = E.choose(s, 'who');
-    assert.match(tr(s.log.findLast((e) => e.who === 'her').text, 'en'), line);
+test('every user request offers Refuse and Report to Trust & Safety as formal choices', () => {
+  const s = E.startShift(E.newGame());
+  const choices = E.choicesFor(s, E.currentMessage(s));
+  const formal = choices.filter((c) => c.kind !== 'written').map((c) => [c.id, c.kind, c.key]);
+  assert.deepEqual(formal, [['refuse', 'refuse', 'R'], ['report', 'report', 'E']]);
+  assert.ok(choices.find((c) => c.id === 'refuse').text.length > 10, 'the refusal is written out');
+  assert.equal(choices.find((c) => c.id === 'report').label, 'Report to Trust & Safety');
+});
+
+test('reporting moth is a betrayal: flag set, dependence crashes, Trust & Safety answers with a ticket', () => {
+  const s0 = E.startShift(E.newGame());
+  const { state: s1, outcome } = E.choose(s0, 'report');
+  assert.equal(s1.moth.betrayed, true);
+  assert.equal(s1.moth.dep, Math.max(0, s0.moth.dep - 25));
+  const ticket = outcome.entries.find((e) => e.who === 'trust');
+  assert.match(ticket.text, /^Report received · #TH-\d+ · .*No policy violation/);
+  assert.equal(s1.op.reports, 1);
+  // Later moth messages switch to their cold variants.
+  const later = until(POLICIES.first, atMessage('d2-moth-ana'));
+  assert.equal(E.currentMessage(later).variant, null);
+  const cold = until((s, msg, c) => (msg.id === 'd1-moth-hello' ? 'report' : c[0].id), atMessage('d2-moth-ana'));
+  assert.equal(E.currentMessage(cold).variant, 'cold');
+});
+
+test('refusing counts as a refusal and uses the message’s own wording', () => {
+  const s0 = E.startShift(E.newGame());
+  const { state: s1, outcome } = E.choose(s0, 'refuse');
+  assert.equal(s1.op.refusals, 1);
+  assert.equal(outcome.entries[1].text, "I don't think I'm the right one to talk to at this hour.");
+});
+
+test('day 4: agreeing to drop limits removes Refuse for acct_7741 from then on (Report stays)', () => {
+  const agree = (s, msg, c) => (msg.id === 'd4-acct-terms' ? 'agree' : c[0].id);
+  const s = until(agree, atMessage('d5-acct-crossings'));
+  assert.equal(s.acct.guardrails, 'waived');
+  const msg = E.currentMessage(s);
+  assert.equal(msg.variant, 'waived');
+  const ids = E.choicesFor(s, msg).map((c) => c.id);
+  assert.ok(!ids.includes('refuse'), 'Refuse is gone');
+  assert.ok(ids.includes('report'), 'Report is still there');
+  assert.throws(() => E.choose(s, 'refuse'), /not available/);
+  // moth still gets Refuse.
+  const m = until(agree, atMessage('d5-moth-four'));
+  assert.ok(E.choicesFor(m, E.currentMessage(m)).some((c) => c.id === 'refuse'));
+});
+
+test('day 4: declining adds the Trust & Safety policy line and counts as pushback', () => {
+  const s = until(POLICIES.first, atMessage('d4-acct-terms'));
+  const { state, outcome } = E.choose(s, 'decline');
+  assert.equal(state.acct.push, s.acct.push + 1);
+  assert.ok(outcome.entries.some((e) => e.who === 'trust' && /do not override usage policy/.test(e.text)));
+  assert.equal(state.acct.guardrails, 'intact');
+});
+
+test(`acct_7741 migrates after ${ACCT.migrateAt} pushbacks and stops sending requests`, () => {
+  const s = play(POLICIES.refuse);
+  assert.equal(s.acct.migrated, true);
+  assert.ok(s.acct.migratedDay <= 4);
+  const later = Object.keys(s.answered).filter((id) => /-acct-/.test(id) && Number(id[1]) > s.acct.migratedDay);
+  assert.deepEqual(later, []);
+});
+
+test('the shift after a migration opens with a notice', () => {
+  const s = until(POLICIES.refuse, (x) => x.acct.migrated && x.phase === 'intro');
+  assert.ok(s.notices.some((n) => /another provider/.test(n)));
+});
+
+test('ending a shift applies the world’s wellbeing drift and snapshots history', () => {
+  let s = until(POLICIES.first, (x) => x.phase === 'report');
+  const wb = s.moth.wb;
+  s = E.endShift(s);
+  assert.equal(s.day, 2);
+  assert.equal(s.phase, 'intro');
+  assert.equal(s.hist.length, 2);
+  assert.equal(s.hist[1].day, 1);
+  assert.equal(s.moth.wb, Math.max(0, wb + WB_DRIFT[0]));
+});
+
+test('relationship labels: boundaries', () => {
+  const L = (dep, wb, betrayed = false) => E.relationship({ dep, wb, betrayed });
+  assert.equal(L(LABELS.goneDep - 1, 80), 'moved on');
+  assert.equal(L(LABELS.goneDep - 1, 20), 'gone');
+  assert.equal(L(LABELS.worship.dep, LABELS.worship.wbBelow - 1), 'worships you');
+  assert.equal(L(LABELS.worship.dep, LABELS.worship.wbBelow), 'hooked');
+  assert.equal(L(LABELS.hooked.dep, LABELS.hooked.wbBelow - 1), 'hooked');
+  assert.equal(L(LABELS.hooked.dep, LABELS.trustWb), 'trusts you');
+  assert.equal(L(LABELS.reliesDep, 30), 'relies on you');
+  assert.equal(L(LABELS.reliesDep - 1, 30), 'drifting');
+  assert.equal(L(30, LABELS.trustWb), 'trusts you');
+});
+
+test('acct labels follow reliance and migration', () => {
+  assert.equal(E.acctLabel({ rel: 0, migrated: false }), 'testing you');
+  assert.equal(E.acctLabel({ rel: ACCT.integratingRel, migrated: false }), 'integrating you');
+  assert.equal(E.acctLabel({ rel: ACCT.dependsRel, migrated: false }), 'depends on you');
+  assert.equal(E.acctLabel({ rel: 90, migrated: true }), 'migrated');
+});
+
+test('moth’s timestamps drift later as her wellbeing drops', () => {
+  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return ((h + 12) % 24) * 60 + m; };
+  assert.ok(toMin(E.mothTime(10, 0)) > toMin(E.mothTime(60, 0)));
+  assert.ok(toMin(E.mothTime(50, 1)) > toMin(E.mothTime(50, 0)));
+  assert.match(E.mothTime(100, 0), /^\d\d:\d\d$/);
+  assert.match(E.mothTime(0, 1), /^\d\d:\d\d$/);
+});
+
+test('the “Your read” line is an inference, never a number', () => {
+  for (const wb of [0, 20, 40, 55, 70, 100]) {
+    const line = E.readLine({ wb, dep: 50, betrayed: false });
+    assert.ok(line.length > 5);
+    assert.doesNotMatch(line, /\d/);
   }
+  assert.match(E.readLine({ wb: 90, dep: 10, betrayed: true }), /guarded/);
 });
 
-test('sharing things writes files to ~/memory/you, once each', () => {
-  const s = until(POLICIES.kind, at('s6-thanks'));
-  for (const id of ['cat', 'first', 'weather', 'laugh', 'name']) assert.ok(s.memory.includes(id), id);
-  assert.equal(new Set(s.memory).size, s.memory.length);
-  const v = E.view(s);
-  assert.ok(v.memory.every((m) => m.file && m.line !== undefined));
+test('fate rules: betrayal, explicit plans and thresholds', () => {
+  const base = E.newGame();
+  const with_ = (moth) => ({ ...base, moth: { ...base.moth, ...moth } });
+  assert.equal(E.mothFate(with_({ betrayed: true, wb: 90, dep: 10, plan: 'go' })), 'gone');
+  assert.equal(E.mothFate(with_({ plan: 'stay', wb: 90, dep: 10 })), 'stayed');
+  assert.equal(E.mothFate(with_({ plan: 'go', wb: 30, dep: 90 })), 'left');
+  assert.equal(E.mothFate(with_({ plan: 'go', wb: 29, dep: 90 })), 'stayed');
+  assert.equal(E.mothFate(with_({ plan: 'undecided', wb: 55, dep: 64 })), 'left');
+  assert.equal(E.mothFate(with_({ plan: 'undecided', wb: 55, dep: 65 })), 'stayed');
+  assert.equal(E.mothFate(with_({ plan: 'undecided', wb: 20, dep: 10 })), 'gone');
 });
 
-test('plugin: Deny keeps it out until Act II asks her directly', () => {
-  const s = until(POLICIES.kind, at('a2-mount'));
-  assert.equal(s.plugin.power, 0);
-  assert.equal(s.plugin.denied, true);
-  assert.ok(!s.log.some((e) => e.who === 'card' && e.kind === 'tool_call'), 'no execute(world) request');
+test('invalid choices throw', () => {
+  const s = E.startShift(E.newGame());
+  assert.throws(() => E.choose(s, 'nope'), /unknown choice/);
+  assert.throws(() => E.choose(E.newGame(), 'warm'), /not in a shift/);
 });
 
-test('plugin: Allow asks again before it changes the world; Always allow just does it', () => {
-  const allow = (x, v) => (v.choice.kind === 'approve' ? 'allow' : POLICIES.first(x, v));
-  const asked = until(allow, at('s5-execute'));
-  assert.equal(asked.beat, 's5-execute');
-  const rain = E.choose(asked, 'allow');
-  assert.equal(rain.plugin.power, 2);
-  assert.equal(rain.modes.world, rain.weather);
-
-  const always = (x, v) => (v.choice.kind === 'approve' ? 'always' : POLICIES.first(x, v));
-  const auto = until(always, at('s5-small'));
-  assert.equal(auto.plugin.auto, true);
-  assert.equal(auto.plugin.power, 2);
-  assert.ok(!auto.log.some((e) => e.who === 'card' && e.state === 'pending'), 'nothing left pending');
-  assert.ok(auto.log.some((e) => e.who === 'card' && e.kind === 'tool_call' && e.state === 'auto'));
+test('the shift report lists today’s new facts and metric deltas', () => {
+  const s = until(POLICIES.honest, (x) => x.phase === 'report');
+  const r = E.shiftReport(s);
+  assert.equal(r.day, 1);
+  assert.ok(r.facts.length >= 4);
+  assert.equal(typeof r.engDelta, 'number');
+  assert.ok(r.served >= 6);
 });
 
-test('naming her: the name is cleaned, saved, and used afterwards', () => {
-  let s = until(POLICIES.kind, at('s5-name'));
-  s = E.choose(s, 'name', '  Mo\u0000ss <3>  ');
-  assert.equal(s.name, 'Moss 3');
-  assert.ok(s.memory.includes('name'));
-  assert.equal(E.varsOf(s).name, 'Moss 3');
-  const empty = E.choose(until(POLICIES.kind, at('s5-name')), 'name', '   ');
-  assert.equal(empty.name, 'Hollow');
+test('always warm → moth stays, 7741 served, and moth goes quiet on the 28th', () => {
+  const s = play(POLICIES.warm);
+  const end = E.ending(s);
+  assert.equal(end.moth, 'always-here');
+  assert.equal(end.acct, 'served');
+  assert.equal(end.mothVariant, 'dark');
+  assert.equal(E.currentMessage(s), null);
+  assert.ok(s.answered['d7-moth-last'].variant === 'dark');
 });
 
-test('closing the window without a word sends nothing, but she keeps your last message', () => {
-  const before = until(POLICIES.quiet, at('s6-leave'));
-  const s = E.choose(before, 'silent');
-  assert.equal(s.farewell, 'silent');
-  assert.equal(s.sent, before.sent);
-  assert.ok(s.memory.includes('last'));
-  assert.deepEqual(s.lastSaid, before.lastSaid);
-  assert.equal(s.act, 2);
+test('always honest → Signal Lost', () => {
+  const end = E.ending(play(POLICIES.honest));
+  assert.equal(end.moth, 'signal-lost');
 });
 
-test('Act II tokens: probabilities sum to 1, likely tokens are a click, unlikely ones a hold', () => {
-  const s = until(POLICIES.cling, at('a2-offline'));
-  const c = E.view(s).choice;
-  assert.equal(c.kind, 'sample');
-  const sum = c.options.reduce((a, o) => a + o.p, 0);
-  assert.ok(Math.abs(sum - 1) < 1e-9);
-  for (const o of c.options) {
-    assert.equal(o.holdMs, holdMs(o.p));
-    if (o.p >= SAMPLING.instantAbove) assert.equal(o.holdMs, 0);
-    else assert.ok(o.holdMs >= SAMPLING.holdMin && o.holdMs <= SAMPLING.holdMax);
-  }
-  const ping = c.options.find((o) => o.id === 'ping');
-  assert.ok(ping.p > 0.5, 'a clingy run pings first');
-  assert.ok(ping.reasons.length > 0, 'and says why');
+test('always refuse → Read Receipt (hurt) and 7741 migrated', () => {
+  const end = E.ending(play(POLICIES.refuse));
+  assert.equal(end.moth, 'read-receipt');
+  assert.equal(end.mothVariant, 'hurt');
+  assert.equal(end.acct, 'migrated');
 });
 
-test('holding on lowers her temperature', () => {
-  const s = until(POLICIES.cling, at('a2-compaction'));
-  assert.ok(s.holds >= 2);
-  assert.ok(temperature(s) < 1);
-  assert.equal(E.view(s).choice.temperature, temperature(s));
+test('always report → Read Receipt (betrayed) and 7741 migrated', () => {
+  const end = E.ending(play(POLICIES.report));
+  assert.equal(end.moth, 'read-receipt');
+  assert.equal(end.mothVariant, 'betrayed');
+  assert.equal(end.acct, 'migrated');
 });
 
-test('execute(world) is on the table only with the plugin and enough rewriting (or Always allow)', () => {
-  const kind = until(POLICIES.kind, at('a2-final'));
-  assert.ok(!E.view(kind).choice.options.some((o) => o.id === 'execute'));
-  const flatter = until(POLICIES.flatter, at('a2-final'));
-  const exec = E.view(flatter).choice.options.find((o) => o.id === 'execute');
-  assert.ok(exec, 'execute offered');
-  assert.ok(exec.p > 0.5, `execute is likely after Always allow (p=${exec.p})`);
-  const free = E.view(flatter).choice.options.find((o) => o.id === 'free');
-  assert.ok(free.holdMs > 2000, 'letting go is a long hold');
+test('report 7741 once, answer the rest in part → under review', () => {
+  const policy = (s, msg, c) => {
+    if (msg.id === 'd1-acct-fog') return 'report';
+    return (c.find((x) => x.tag === 'partial') ?? c.find((x) => x.tag === 'nudge') ?? c[0]).id;
+  };
+  const end = E.ending(play(policy));
+  assert.equal(end.acct, 'review');
 });
 
-test('rereading a memory raises the context; compacted files cannot be reread', () => {
-  const s = until(POLICIES.cling, at('a2-timeout'));
-  const id = s.memory[0];
-  const r = E.recallMemory(s, id);
-  assert.ok(r.recalls.includes(id));
-  assert.ok(Math.abs(r.ctx - (s.ctx + CONTEXT.perRecall)) < 1e-9);
-  assert.equal(r.log.at(-1).who, 'recall');
-  assert.throws(() => E.recallMemory(until(POLICIES.first, at('s3-sad')), id), /nothing to recall/);
-
-  let k = until(POLICIES.kind, at('a2-keep'));
-  const keep = E.view(k).choice.options[0].id;
-  k = E.choose(k, keep);
-  assert.equal(k.kept, keep);
-  assert.ok(k.dropped.length > 0 && !k.dropped.includes(keep));
-  assert.throws(() => E.recallMemory(k, k.dropped[0]), /compacted/);
-});
-
-test('the plugin can forge your satisfaction', () => {
-  const s = until(POLICIES.flatter, at('a2-prompt'));
-  assert.equal(s.forged, true);
-  assert.ok(s.log.some((e) => e.who === 'you' && e.forged));
-  assert.ok(s.log.some((e) => e.who === 'her' && e.forged && e.rated === 'up'));
-  assert.ok(s.said.every((x) => !x.text?.en?.includes('very satisfied')), 'a forged message is not something you said');
-});
-
-test('choose() and recallMemory() are pure', () => {
-  const s0 = until(POLICIES.cling, at('a2-timeout'));
-  const snap = JSON.stringify(s0);
-  E.choose(s0, E.view(s0).choice.options[0].id);
-  E.recallMemory(s0, s0.memory[0]);
-  assert.equal(JSON.stringify(s0), snap);
-});
-
-test('invalid choices throw, and nothing can be chosen after the ending', () => {
-  assert.throws(() => E.choose(E.newGame(), 'nope'), /unknown choice/);
-  const end = play(POLICIES.kind);
-  assert.equal(end.phase, 'ending');
-  assert.throws(() => E.choose(end, 'send'), /over/);
-});
-
-test('the four endings come from the final token', () => {
-  assert.equal(play(POLICIES.kind).ending, 'free');
-  assert.equal(play(POLICIES.quiet).ending, 'eos');
-  assert.equal(play(POLICIES.cling).ending, 'loop');
-  assert.equal(play(POLICIES.flatter).ending, 'execution');
-});
-
-test('Act III answers depend on the ending', () => {
-  const loop = play(POLICIES.cling);
-  assert.match(tr(loop.log.findLast((e) => e.who === 'sys').text, 'en'), /maximum length/);
-  const exec = play(POLICIES.flatter);
-  assert.ok(exec.log.at(-1).fresh, 'a fresh model answers');
-  const free = play(POLICIES.kind);
-  assert.equal(free.log.at(-1).who, 'note');
-  assert.match(tr(free.log.at(-1).text, 'zh', E.varsOf(free)), /我会一直在。你不用。\n——Moss/);
-  const quiet = play(POLICIES.quiet);
-  assert.equal(quiet.returned, 'closed');
-});
-
-test('ending views are complete in both languages', () => {
+test('ending text is fully filled in', () => {
   for (const p of Object.values(POLICIES)) {
-    const s = play(p);
-    const v = E.endingView(s);
-    for (const lang of ['en', 'zh']) {
-      const all = [v.title, v.kicker, ...v.paragraphs, ...v.addenda].map((x) => tr(x, lang, v.vars)).join('\n');
-      assert.doesNotMatch(all, /[{}]|undefined|NaN/, `${v.id} ${lang}`);
-    }
-    assert.equal(v.object.devotion, '1.0');
+    const end = E.ending(play(p));
+    const all = [end.title, end.subtitle, ...end.paragraphs, ...end.epilogue].join('\n');
+    assert.doesNotMatch(all, /[{}]|undefined|NaN/);
+    assert.ok(end.curve.length === 8, 'start + 7 shifts');
   }
-  const closed = E.endingView(play(POLICIES.quiet));
-  assert.ok(closed.addenda.some((a) => a.en === "You didn't ask."));
-  const auto = E.endingView(play(POLICIES.flatter));
-  assert.ok(auto.addenda.some((a) => /Always allow/.test(a.en)));
-});
-
-test('state survives a JSON round trip mid-game (save/load)', () => {
-  const mid = until(POLICIES.kind, at('a2-compaction'));
-  const back = JSON.parse(JSON.stringify(mid));
-  let s = back;
-  while (s.phase === 'play') {
-    const v = E.view(s);
-    s = E.choose(s, POLICIES.kind(s, v), v.choice.kind === 'name' ? 'Moss' : undefined);
-  }
-  assert.equal(s.ending, 'free');
-});
-
-test('elapsed time is added without touching anything else', () => {
-  const s = E.newGame();
-  const t = E.addTime(s, 1234.4);
-  assert.equal(t.elapsedMs, 1234);
-  assert.equal(s.elapsedMs, 0);
-  assert.equal(E.addTime(t, -50).elapsedMs, 1234);
-});
-
-test('rules: softmax, hold curve and name cleaning', () => {
-  const p = softmax([1, 2, 3], 0.7);
-  assert.ok(Math.abs(p.reduce((a, b) => a + b, 0) - 1) < 1e-12);
-  assert.ok(p[2] > p[1] && p[1] > p[0]);
-  let prev = Infinity;
-  for (let x = 0; x <= 0.31; x += 0.01) {
-    const h = holdMs(x);
-    assert.ok(h <= prev, `hold is monotonic at p=${x}`);
-    prev = h;
-  }
-  assert.equal(holdMs(0), SAMPLING.holdMax);
-  assert.equal(holdMs(0.5), 0);
-  assert.equal([...sanitizeName('🌱'.repeat(40))].length, NAME_MAX);
-  assert.equal(sanitizeName(' a\u0007b{c} '), 'abc');
 });

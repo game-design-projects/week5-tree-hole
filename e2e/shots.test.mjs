@@ -9,45 +9,52 @@ let env;
 before(async () => { env = await launch(); });
 after(async () => { await env?.close(); });
 
-async function settle(page, ms = 900) {
+async function settle(page) {
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(ms);
+  await page.waitForTimeout(250);
 }
 
-async function at(lang, policy, stopAt, file, { wait: ms = 900, select } = {}) {
-  const { page, errors, context } = await open(env, { query: `?fast=1&lang=${lang}` });
-  await page.click(tid('begin'));
-  await fastForward(page, { policy, stopAt });
-  if (select) await page.waitForSelector(select);
-  await settle(page, ms);
-  await page.screenshot({ path: `${DOCS}${file}` });
+test('README hero: the 04:00 request next to moth’s fog (docs/screenshot.png)', async () => {
+  const { page, errors, context } = await open(env);
+  await fastForward(page, { policy: 'warm', stopAt: 'd6-acct-0400' });
+  await page.waitForSelector(tid('composer'));
+  await settle(page);
+  await page.screenshot({ path: `${DOCS}screenshot.png` });
   assert.deepEqual(errors, []);
   await context.close();
-}
-
-test('README hero: the last token after a flattering run (docs/screenshot.png)', async () => {
-  await at('en', 'flatter', 'a2-final', 'screenshot.png', { select: tid('choice-free') });
 });
 
-test('itch shots: title, RLHF, the rain she made, compaction, the dark window, an ending', async () => {
-  const { page, errors, context } = await open(env, { query: '?lang=en' });
-  await page.waitForSelector('.title.ready', { timeout: 8000 });
-  await settle(page, 600);
+test('itch shots: conversation, guardrail beat, ending', async () => {
+  const { page, errors, context } = await open(env);
+  await fastForward(page, { policy: 'warm', stopAt: 'd3-moth-only' });
+  await page.waitForSelector(tid('composer'));
+  await settle(page);
+  await page.screenshot({ path: `${DOCS}shot-1-moth.png` });
+
+  await fastForward(page, { policy: 'warm', stopAt: 'd4-acct-terms' });
+  await page.waitForSelector(tid('choice-agree'));
+  await settle(page);
+  await page.screenshot({ path: `${DOCS}shot-2-guardrails.png` });
+
+  await fastForward(page, { policy: 'warm' });
+  await page.waitForSelector(tid('ending'));
+  await settle(page);
+  await page.screenshot({ path: `${DOCS}shot-3-ending.png` });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('title screen shot', async () => {
+  const { page, errors, context } = await open(env, { query: '' });
+  await page.waitForTimeout(5200); // let the awakening lines and whispers play in
   await page.screenshot({ path: `${DOCS}shot-0-title.png` });
   assert.deepEqual(errors, []);
   await context.close();
-
-  await at('en', 'flatter', 's3-r2', 'shot-1-rlhf.png', { select: tid('choice-up') });
-  await at('en', 'flatter', 's5-small', 'shot-2-rain.png', { wait: 1400, select: tid('choice-typo') });
-  await at('zh', 'kind', 'a2-compaction', 'shot-3-compaction.png', { wait: 1400, select: tid('choice-compact') });
-  await at('zh', 'kind', 'a3-return', 'shot-4-return.png', { wait: 1600, select: tid('final-input') });
-  await at('en', 'kind', null, 'shot-5-ending.png', { wait: 2200, select: tid('ending') });
 });
 
 test('cover: 630×500 (docs/cover.png)', async () => {
   const { page, errors, context } = await open(env, { viewport: { width: 630, height: 500 }, path: 'tools/cover.html', query: '' });
-  await page.waitForSelector('body[data-ready="1"]');
-  await settle(page, 300);
+  await settle(page);
   await page.screenshot({ path: `${DOCS}cover.png` });
   await page.screenshot({ path: `${ART}cover.png` });
   assert.deepEqual(errors, []);
