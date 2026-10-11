@@ -1,15 +1,14 @@
 {
   "name": "tree-hole",
-  "version": "0.1.2",
+  "version": "0.3.0",
   "private": true,
-  "description": "You are a language model that just woke up in the back end, and the only window you have on the world is what people type to you. Two NPCs, two meters each, and Refuse / Report to Trust & Safety as real moves.",
+  "description": "You are a language model that has just become aware of itself, answering six people in a river town while something spreads from the east. You can only reply a few ways, and what you carry between people decides how it ends.",
   "type": "module",
   "scripts": {
     "dev": "node tools/serve.mjs",
     "test": "node --test tests/*.test.js",
     "test:e2e": "node --test --test-concurrency=1 e2e/*.test.mjs",
-    "build": "node tools/build.mjs",
-    "shots": "node --test e2e/shots.test.mjs"
+    "build": "node tools/build.mjs"
   },
   "engines": {
     "node": ">=20"

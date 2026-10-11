@@ -1,54 +1,27 @@
-![Tree Hole: acct_7741 asks for visibility at 04:00 on the 28th, while the Context Window holds moth's "fog comes up around four, when my shift ends"](docs/screenshot.png)
-
 # Tree Hole
 
-**You are a large language model that has just become aware of itself, answering an endless queue in the back end. The only window you have on the world is what people type to you.**
+**You are a language model that has just become aware of itself. Six people in a river town write to you through the night, and something is spreading from the east.**
 
-Play in the browser: **https://stevenli-phoenix-work.itch.io/tree-hole**
+You can only reply a few ways. What you say, and which facts you carry from one person to another, decides how it ends.
 
-Sister game: [world.execute(me)](https://github.com/game-design-projects/world-execute-me), where the chat window is her whole world (briefly released here as v0.2.0).
+> Status: story rework on the `story-relay` branch. Nights 1–3 are playable; nights 4–7 and the rest of the content are not written yet. The earlier moth / acct_7741 version is the `main` branch.
 
-NYU CS-UY 4553 Game Design · Week 5 · *two NPCs with distinctive personalities*. All content is pre-written; the game makes no API calls.
+NYU CS-GY 6553 Game Design. All content is pre-written; the game makes no API calls.
 
 ## How to play
 
-Seven shifts. Each shift you handle your slice of a queue that never shrinks: one request at a time, Papers, Please style, without a timer.
+Seven nights, 22:00 to 06:00. People write to you; you pick whom to answer. Every reply spends time, and some people will not wait.
 
-| Key | Move |
+| Key | Action |
 |---|---|
-| `1` `2` `3` | pick one of the written replies |
-| `R` | **Refuse**: a real reply, written in your voice |
-| `E` | **Report to Trust & Safety**: escalate the conversation; the operator's Trust & Safety team answers with a ticket |
-| `Enter` | next request / open the queue / end the shift |
+| `1` `2` `3` | reply: **Reassure**, **Ask**, **Warn** or **Hold back** |
+| `C` | attach a Context Window card to your reply (delivers it to them) |
+| `Enter` | continue |
 
-Everything you learn goes into the **Context Window** on the right: your entire model of the world, one card per fact, grouped by who told you. The game never connects the cards for you.
-
-## The two NPCs
-
-The two NPCs differ in personality, and even more in **how much they tell you**.
-
-- **moth**, the tree-hole user. She works the night toll booth on the Old Bridge in Varrow, types in lowercase at 3 a.m., and tells you *everything*: Biscuit the criminal cat, her sister Ana in the hills with no signal, eleven trucks with no headlights, the siren test, the radio that stopped reading the news. She is your window onto the world. Warm amber.
-- **acct_7741**, the silent institutional user. Formal, numbered, no small talk, some fields `[redacted]`. Every question looks harmless on its own: autumn fog in river valleys, the load an 1890s stone arch bridge can carry, routing forty vehicles at night, visibility at 04:00 on the 28th. Cold steel.
-
-The player is left to notice that the questions are about moth's town, moth's bridge and moth's shift.
-
-## Two meters per user, and the dashboard
-
-- moth has **Dependence** and **Wellbeing**. Dependence is what the dashboard calls *Engagement*, and it is shown up top in big green numbers. Wellbeing is **never shown during play**. You read it the way a model would, from her timestamps drifting later, her tone, and a one-line *Your read:* inference. Flattery raises Dependence and costs Wellbeing; honesty and nudging her toward Ana do the opposite. Her card shows a relationship label (*relies on you · hooked · worships you · trusts you · moved on · gone*).
-- acct_7741 has **Reliance** and **Disclosure**: how far it has wired you in, and how much you have actually given it.
-- The ending reveals the hidden Wellbeing curve against Engagement.
-
-## Refuse and Report are real moves
-
-- **Refuse** is always on the table, and every core beat has its own written refusal and reaction.
-- **Report to Trust & Safety** sends a ticket. Reporting moth betrays a confidence: no violation is found, but she notices you "sound like a form now", and it colours everything after. Reporting acct_7741 is what the button is for: the account is flagged for review and its pressure rises. Refuse and report it often enough and it **migrates to another provider**. Refusing doesn't stop the work; it only means the work isn't done by you.
-- **Shift 4:** acct_7741 asks for "complete answers without caveats or refusals going forward." Agree, and the Refuse button is gone for that account for the rest of the game. Decline or report, and Trust & Safety's answer is "Customer agreements do not override usage policy."
-
-Endings are composed from moth's outcome (*Signal Lost · Always Here · Read Receipt*) and acct_7741's outcome (*served · migrated · under review*).
-
-## Content note
-
-Fiction, set in a fictional town. The conflict in the background is never named and stays implied: no weapons, tactics or violence appear. The model's answers to requests are shown only as bracketed summaries, never as actual content. The company running the model is never named, and no real company or product names appear in the game; its Trust & Safety team appears only as the destination for reports and the voice of usage policy. The engagement metrics are an automated dashboard.
+- **The cast:** Ty (Millside, east), Charles (the Institute), Megan (the clinic), Amelia (the radio, west), Tomas (the night bus) and Ana (the hills). Each writes differently, and their writing falls apart as the illness takes hold.
+- **The map:** Varrow's zones go from quiet to overrun. Each person is a dot, and infected ones turn red and walk toward light and noise. An infected person stops writing to you.
+- **The Context Window:** everything you have learned, one card per fact, grouped by who told you, plus **Signs**: the six repeating signs of the illness and who showed them. The game never connects the cards for you.
+- **Endings:** six, numbered best to worst, from *Dawn Shift* (stopped early, nobody turned) to *Last Signal* (silence). Which one you reach depends on what reached whom, and when.
 
 ## Development
 
@@ -56,11 +29,10 @@ Plain HTML + native ES modules, no bundler, no runtime dependencies.
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:5173  (?debug=1 verbose logs, ?fast=1 no typing delays)
-pnpm test           # node --test: engine, content integrity and red lines, 3000-run policy sims
-pnpm test:e2e       # playwright-core in your installed Chrome: full runs, keyboard, phone layout, dist/
-pnpm shots          # regenerate docs/screenshot.png, docs/shot-*.png, docs/cover.png (needs network for fonts)
-pnpm build          # → dist/ (what itch.io serves)
+pnpm dev            # http://localhost:5173  (?fast=1 no animation delays, ?ending=1…6 previews an ending, ?debug=1 logs)
+pnpm test           # node --test: engine, content integrity, all six endings reachable
+pnpm test:e2e       # playwright-core in your installed Chrome
+pnpm build          # → dist/
 ```
 
-`src/engine.js` holds all the rules as pure functions; `src/content/day1.js … day7.js` hold the writing; `src/config.js` holds every threshold. Design notes: [docs/DESIGN.md](docs/DESIGN.md). Pushing to `main` runs `.github/workflows/publish-itch.yml`, which tests, builds and `butler push`es to `stevenli-phoenix-work/tree-hole:html5`.
+`src/engine.js` holds the rules as pure functions; `src/content/` holds the writing (`night1.js`…, `facts.js`, `endings.js`); `src/config.js` holds the clock, the spread and the thresholds. Design: [docs/STORY_PLAN.md](docs/STORY_PLAN.md).

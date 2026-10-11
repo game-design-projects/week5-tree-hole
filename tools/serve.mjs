@@ -4,6 +4,7 @@
 //   PORT=8080 pnpm dev
 //   node tools/serve.mjs dist   (serve the itch.io build instead of the source tree)
 import { createServer } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
@@ -62,7 +63,7 @@ export function createStaticServer(rootDir) {
   });
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
   const root = process.argv[2] ?? '.';
   const port = Number(process.env.PORT ?? 5173);

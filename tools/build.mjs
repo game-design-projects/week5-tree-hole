@@ -4,8 +4,9 @@
 // paths). `butler push dist stevenli-phoenix-work/tree-hole:html5` publishes it.
 import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = resolve(new URL('..', import.meta.url).pathname);
+const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const RUNTIME = ['index.html', 'src', 'styles'];
 
 async function dirSize(path) {
@@ -35,7 +36,7 @@ export async function build({ outDir = join(ROOT, 'dist') } = {}) {
   return { outDir, bytes, files };
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
   build().catch((err) => {
     console.error('[build] failed:', err);

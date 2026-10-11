@@ -1,5 +1,6 @@
 // Entry point. URL flags: ?debug=1 (verbose [tag] logs), ?fast=1 (no typing
-// delays or intro animation; used by e2e). window.__th is the e2e/debug hook.
+// delays or intro animation; used by e2e), ?ending=1…6 (preview an ending).
+// window.__th is the e2e/debug hook.
 import * as engine from './engine.js';
 import { APP_VERSION } from './config.js';
 import { createLog } from './log.js';
@@ -15,5 +16,8 @@ const log = createLog(debug);
 const store = createStore(log);
 log.event('boot', `Tree Hole v${APP_VERSION}`, { debug, fast });
 
-const app = createApp(document.getElementById('app'), { log, fast, store });
+const ending = Number(params.get('ending'));
+const forceEnding = ending >= 1 && ending <= 6 ? ending : null;
+
+const app = createApp(document.getElementById('app'), { log, fast, store, forceEnding });
 window.__th = { app, engine, store, version: APP_VERSION };

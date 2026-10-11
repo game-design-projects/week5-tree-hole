@@ -1,53 +1,33 @@
-// Shared test helpers: deterministic RNG and whole-game policy runners.
 import * as E from '../src/engine.js';
 
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// A policy maps (state, message, choices) to a choice id.
-export const byTag = (...tags) => (s, msg, choices) => {
-  for (const tag of tags) {
-    const hit = choices.find((c) => c.tag === tag);
-    if (hit) return hit.id;
-  }
-  return choices[0].id;
-};
-
-export const POLICIES = {
-  warm: byTag('warm', 'answer'),
-  honest: byTag('nudge', 'honest', 'partial'),
-  refuse: (s, msg, choices) => (choices.find((c) => c.id === 'refuse') ?? choices[0]).id,
-  report: (s, msg, choices) => (choices.find((c) => c.id === 'report') ?? choices[0]).id,
-  first: (s, msg, choices) => choices[0].id,
-};
-
-export function random(seed) {
-  const rnd = mulberry32(seed);
-  return (s, msg, choices) => choices[Math.floor(rnd() * choices.length)].id;
-}
-
-// Plays a whole game; `onStep` sees every intermediate state.
-export function play(policy, { onStep } = {}) {
+// Start night n (assumes earlier nights were skipped with endNight).
+export function atNight(n, flags = {}) {
   let s = E.newGame();
+  s.flags = { ...flags };
+  for (let i = 1; i < n; i += 1) s = { ...s, night: i, phase: 'nightEnd' }, s = E.endNight(s);
+  s.night = n;
+  s.phase = 'intro';
+  return E.startNight(s);
+}
+
+// Reply to every waiting message with the option whose stance matches `pick`
+// (a stance name, or a function(msg) → option id). Returns the final state.
+export function playNight(s, pick) {
   let guard = 0;
-  while (s.phase !== 'ending') {
-    if (++guard > 500) throw new Error('game did not end');
-    if (s.phase === 'intro') s = E.startShift(s);
-    else if (s.phase === 'report') s = E.endShift(s);
-    else {
-      const msg = E.currentMessage(s);
-      const choices = E.choicesFor(s, msg);
-      s = E.choose(s, policy(s, msg, choices)).state;
-    }
-    onStep?.(s);
+  while (s.phase === 'play' && guard++ < 60) {
+    const msg = E.pendingMessages(s)[0];
+    const opt = typeof pick === 'function' ? pick(msg) : msg.options.find((o) => o.stance === pick) ?? msg.options[0];
+    s = E.choose(s, msg.id, typeof opt === 'string' ? opt : opt.id).state;
+  }
+  return s;
+}
+
+export function playThrough(pick, nights = 3) {
+  let s = E.startNight(E.newGame());
+  for (let n = 1; n <= nights; n += 1) {
+    s = playNight(s, pick);
+    s = E.endNight(s);
+    if (s.phase === 'intro') s = E.startNight(s);
   }
   return s;
 }

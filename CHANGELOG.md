@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-11
+
+Story rework, branch `story-relay`. See [docs/STORY_PLAN.md](docs/STORY_PLAN.md).
+
+### Added
+
+- A new story: something goes wrong at the Institute on the east bank of Varrow and spreads west over seven nights. Six people write to you: Ty, Charles, Megan, Amelia, Tomas and Ana, each in their own voice.
+- A town map in place of the queue depth: zones move from quiet to overrun, each cast member is a dot, and infected characters turn red and wander west.
+- Card relay: attach a Context Window card to a reply to deliver it to someone else. Their reaction and the flags it sets drive the spread and the ending.
+- A clock: every reply costs time, and some messages expire. You cannot answer everyone.
+- Six repeating signs of the illness, collected under **Signs** in the Context Window.
+- Six numbered endings, best to worst (Dawn Shift … Last Signal), with an "Ending N of 6" counter; the worst is silence. `?ending=1…6` previews one.
+- Playable slice: nights 1–3 (Ty, Megan, Charles, Tomas, Amelia, Ana). Nights 4–7 are not written yet.
+
+### Removed
+
+- The moth / acct_7741 plot, engagement and wellbeing meters and the wellbeing reveal, the operator dashboard, and the Refuse and Report moves.
+
+### Fixed
+
+- `pnpm dev`, `pnpm build` and the e2e helpers did nothing or failed on Windows because of how they detected being run directly and how they turned `file://` URLs into paths.
+
 ## [0.1.2] - 2026-10-10
 
 ### Changed

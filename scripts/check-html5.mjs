@@ -3,6 +3,7 @@
 // Usage: node check-html5.mjs <dir> [--unity]
 import { readdir, readFile, stat, lstat } from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 
 // itch.io HTML5 limits: https://itch.io/docs/creators/html5
@@ -74,7 +75,7 @@ export async function validate(root, { unity = false } = {}) {
   console.log(`HTML5_PACKAGE_OK${unity ? ' (unity)' : ''}: ${files.length} files, ${(total / 1024 / 1024).toFixed(1)} MiB`);
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const args = process.argv.slice(2);
   const dir = args.find(a => !a.startsWith('--'));
   if (!dir) { console.error('usage: node check-html5.mjs <dir> [--unity]'); process.exit(2); }

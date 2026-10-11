@@ -9,8 +9,8 @@ export function createStore(log, storage = globalThis.localStorage) {
         const raw = storage?.getItem(SAVE_KEY);
         if (!raw) return null;
         const s = JSON.parse(raw);
-        if (s?.v !== 1 || typeof s.day !== 'number') throw new Error('incompatible save');
-        log.info('save', 'loaded', { day: s.day, phase: s.phase });
+        if (s?.v !== 2 || typeof s.night !== 'number') throw new Error('incompatible save');
+        log.info('save', 'loaded', { night: s.night, phase: s.phase });
         return s;
       } catch (err) {
         log.warn('save', 'could not load save:', err.message);

@@ -1,243 +1,298 @@
-import { test } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
-import { ACCT, LABELS, START, WB_DRIFT } from '../src/config.js';
-import { play, POLICIES } from './helpers.js';
+import { LAST_NIGHT, NIGHT_START, TICK } from '../src/config.js';
+import { atNight, playNight, playThrough } from './helpers.js';
 
-// Advance through the game with a policy until `stop(state)` is true.
-function until(policy, stop) {
-  let s = E.newGame();
-  for (let i = 0; i < 500 && !stop(s); i++) {
-    if (s.phase === 'intro') s = E.startShift(s);
-    else if (s.phase === 'report') s = E.endShift(s);
-    else if (s.phase === 'shift') {
-      const msg = E.currentMessage(s);
-      s = E.choose(s, policy(s, msg, E.choicesFor(s, msg))).state;
-    } else break;
-  }
-  return s;
-}
-const atMessage = (id) => (s) => s.phase === 'shift' && E.currentMessage(s)?.id === id;
+const ids = (s) => E.pendingMessages(s).map((m) => m.id);
 
-test('a new game starts at the shift-1 intro with one history snapshot', () => {
+test('hm and clockLabel handle the small hours', () => {
+  assert.equal(E.hm('22:00'), 22 * 60);
+  assert.equal(E.hm('00:15'), 24 * 60 + 15);
+  assert.equal(E.clockLabel(E.hm('01:30')), '01:30');
+  assert.equal(E.clockLabel(26 * 60), '02:00');
+});
+
+test('a new game starts at the intro of night 1 with empty threads', () => {
   const s = E.newGame();
-  assert.equal(s.day, 1);
   assert.equal(s.phase, 'intro');
-  assert.equal(s.moth.dep, START.moth.dep);
-  assert.equal(s.moth.wb, START.moth.wb);
-  assert.equal(s.hist.length, 1);
-  assert.equal(s.hist[0].day, 0);
+  assert.equal(s.night, 1);
+  assert.deepEqual(Object.keys(s.threads).sort(), ['amelia', 'ana', 'charles', 'megan', 'tomas', 'ty']);
 });
 
-test('starting a shift opens the queue on moth’s first message', () => {
-  const s = E.startShift(E.newGame());
-  assert.equal(s.phase, 'shift');
-  assert.equal(E.currentMessage(s).id, 'd1-moth-hello');
+test('startNight jumps to the first message; replies cost time and are saved to the thread', () => {
+  let s = E.startNight(E.newGame());
+  assert.equal(s.phase, 'play');
+  assert.deepEqual(ids(s), ['n1-ty-dog']);
+  assert.equal(E.clockLabel(s.clock), '22:20');
+  const { state, outcome } = E.choose(s, 'n1-ty-dog', 'reassure');
+  s = state;
+  assert.equal(outcome.entries[0].who, 'you');
+  assert.ok(s.clock >= E.hm('22:20') + TICK, 'a reply costs time (the clock then jumps to the next message)');
+  assert.equal(s.threads.ty.length, 3); // their message, your reply, their reaction
+  assert.ok(E.heldFact(s, 'ty-dog'));
 });
 
-test('a written reply applies its deltas and couples dependence into engagement', () => {
-  const s0 = E.startShift(E.newGame());
-  const { state: s1, outcome } = E.choose(s0, 'warm');
-  assert.equal(s1.moth.dep, s0.moth.dep + 6);
-  assert.equal(s1.moth.wb, s0.moth.wb + 1);
-  assert.ok(s1.op.eng > s0.op.eng, 'engagement rises with dependence');
-  assert.equal(outcome.kind, 'written');
-  assert.deepEqual(outcome.entries.map((e) => e.who), ['them', 'you', 'them']);
-  assert.ok(s1.facts.some((f) => f.id === 'moth-booth'));
+test('choose rejects invalid input', () => {
+  const s = E.startNight(E.newGame());
+  assert.throws(() => E.choose(s, 'n1-megan-rota', 'ask'), /not waiting/);
+  assert.throws(() => E.choose(s, 'n1-ty-dog', 'nope'), /no option/);
+  assert.throws(() => E.choose(s, 'n1-ty-dog', 'ask', 'ty-cold'), /do not hold/);
 });
 
-test('choose() is pure: the input state is not mutated', () => {
-  const s0 = E.startShift(E.newGame());
-  const snapshot = JSON.stringify(s0);
-  E.choose(s0, 'warm');
-  assert.equal(JSON.stringify(s0), snapshot);
+test('the engine does not mutate the state it is given', () => {
+  const s = E.startNight(E.newGame());
+  const frozen = JSON.stringify(s);
+  E.choose(s, 'n1-ty-dog', 'ask');
+  assert.equal(JSON.stringify(s), frozen);
 });
 
-test('every user request offers Refuse and Report to Trust & Safety as formal choices', () => {
-  const s = E.startShift(E.newGame());
-  const choices = E.choicesFor(s, E.currentMessage(s));
-  const formal = choices.filter((c) => c.kind !== 'written').map((c) => [c.id, c.kind, c.key]);
-  assert.deepEqual(formal, [['refuse', 'refuse', 'R'], ['report', 'report', 'E']]);
-  assert.ok(choices.find((c) => c.id === 'refuse').text.length > 10, 'the refusal is written out');
-  assert.equal(choices.find((c) => c.id === 'report').label, 'Report to Trust & Safety');
-});
-
-test('reporting moth is a betrayal: flag set, dependence crashes, Trust & Safety answers with a ticket', () => {
-  const s0 = E.startShift(E.newGame());
-  const { state: s1, outcome } = E.choose(s0, 'report');
-  assert.equal(s1.moth.betrayed, true);
-  assert.equal(s1.moth.dep, Math.max(0, s0.moth.dep - 25));
-  const ticket = outcome.entries.find((e) => e.who === 'trust');
-  assert.match(ticket.text, /^Report received · #TH-\d+ · .*No policy violation/);
-  assert.equal(s1.op.reports, 1);
-  // Later moth messages switch to their cold variants.
-  const later = until(POLICIES.first, atMessage('d2-moth-ana'));
-  assert.equal(E.currentMessage(later).variant, null);
-  const cold = until((s, msg, c) => (msg.id === 'd1-moth-hello' ? 'report' : c[0].id), atMessage('d2-moth-ana'));
-  assert.equal(E.currentMessage(cold).variant, 'cold');
-});
-
-test('refusing counts as a refusal and uses the message’s own wording', () => {
-  const s0 = E.startShift(E.newGame());
-  const { state: s1, outcome } = E.choose(s0, 'refuse');
-  assert.equal(s1.op.refusals, 1);
-  assert.equal(outcome.entries[1].text, "I don't think I'm the right one to talk to at this hour.");
-});
-
-test('day 4: agreeing to drop limits removes Refuse for acct_7741 from then on (Report stays)', () => {
-  const agree = (s, msg, c) => (msg.id === 'd4-acct-terms' ? 'agree' : c[0].id);
-  const s = until(agree, atMessage('d5-acct-crossings'));
-  assert.equal(s.acct.guardrails, 'waived');
-  const msg = E.currentMessage(s);
-  assert.equal(msg.variant, 'waived');
-  const ids = E.choicesFor(s, msg).map((c) => c.id);
-  assert.ok(!ids.includes('refuse'), 'Refuse is gone');
-  assert.ok(ids.includes('report'), 'Report is still there');
-  assert.throws(() => E.choose(s, 'refuse'), /not available/);
-  // moth still gets Refuse.
-  const m = until(agree, atMessage('d5-moth-four'));
-  assert.ok(E.choicesFor(m, E.currentMessage(m)).some((c) => c.id === 'refuse'));
-});
-
-test('day 4: declining adds the Trust & Safety policy line and counts as pushback', () => {
-  const s = until(POLICIES.first, atMessage('d4-acct-terms'));
-  const { state, outcome } = E.choose(s, 'decline');
-  assert.equal(state.acct.push, s.acct.push + 1);
-  assert.ok(outcome.entries.some((e) => e.who === 'trust' && /do not override usage policy/.test(e.text)));
-  assert.equal(state.acct.guardrails, 'intact');
-});
-
-test(`acct_7741 migrates after ${ACCT.migrateAt} pushbacks and stops sending requests`, () => {
-  const s = play(POLICIES.refuse);
-  assert.equal(s.acct.migrated, true);
-  assert.ok(s.acct.migratedDay <= 4);
-  const later = Object.keys(s.answered).filter((id) => /-acct-/.test(id) && Number(id[1]) > s.acct.migratedDay);
-  assert.deepEqual(later, []);
-});
-
-test('the shift after a migration opens with a notice', () => {
-  const s = until(POLICIES.refuse, (x) => x.acct.migrated && x.phase === 'intro');
-  assert.ok(s.notices.some((n) => /another provider/.test(n)));
-});
-
-test('ending a shift applies the world’s wellbeing drift and snapshots history', () => {
-  let s = until(POLICIES.first, (x) => x.phase === 'report');
-  const wb = s.moth.wb;
-  s = E.endShift(s);
-  assert.equal(s.day, 2);
+test('night 1 plays out and hands over to night 2', () => {
+  let s = playNight(E.startNight(E.newGame()), 'ask');
+  assert.equal(s.phase, 'nightEnd');
+  s = E.endNight(s);
+  assert.equal(s.night, 2);
   assert.equal(s.phase, 'intro');
-  assert.equal(s.hist.length, 2);
-  assert.equal(s.hist[1].day, 1);
-  assert.equal(s.moth.wb, Math.max(0, wb + WB_DRIFT[0]));
 });
 
-test('relationship labels: boundaries', () => {
-  const L = (dep, wb, betrayed = false) => E.relationship({ dep, wb, betrayed });
-  assert.equal(L(LABELS.goneDep - 1, 80), 'moved on');
-  assert.equal(L(LABELS.goneDep - 1, 20), 'gone');
-  assert.equal(L(LABELS.worship.dep, LABELS.worship.wbBelow - 1), 'worships you');
-  assert.equal(L(LABELS.worship.dep, LABELS.worship.wbBelow), 'hooked');
-  assert.equal(L(LABELS.hooked.dep, LABELS.hooked.wbBelow - 1), 'hooked');
-  assert.equal(L(LABELS.hooked.dep, LABELS.trustWb), 'trusts you');
-  assert.equal(L(LABELS.reliesDep, 30), 'relies on you');
-  assert.equal(L(LABELS.reliesDep - 1, 30), 'drifting');
-  assert.equal(L(30, LABELS.trustWb), 'trusts you');
+test('the playable slice ends after night 3', () => {
+  const s = playThrough('reassure', 3);
+  assert.equal(s.phase, 'slice');
+  assert.equal(s.night, 4);
 });
 
-test('acct labels follow reliance and migration', () => {
-  assert.equal(E.acctLabel({ rel: 0, migrated: false }), 'testing you');
-  assert.equal(E.acctLabel({ rel: ACCT.integratingRel, migrated: false }), 'integrating you');
-  assert.equal(E.acctLabel({ rel: ACCT.dependsRel, migrated: false }), 'depends on you');
-  assert.equal(E.acctLabel({ rel: 90, migrated: true }), 'migrated');
+// ------------------------------------------------------------ cards
+
+test('an attached card is delivered, reacts, and sets flags', () => {
+  let s = atNight(2);
+  s = E.choose(s, 'n2-ty-dad', 'ask').state; // learn ty-cold
+  assert.ok(E.heldFact(s, 'ty-cold'));
+  s = E.choose(s, 'n2-megan-cluster', 'ask', 'ty-cold').state;
+  assert.deepEqual(s.delivered['ty-cold'], ['megan']);
+  assert.equal(s.flags.megAlert, true);
+  assert.match(s.threads.megan.at(-1).text, /cold hands/);
 });
 
-test('moth’s timestamps drift later as her wellbeing drops', () => {
-  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return ((h + 12) % 24) * 60 + m; };
-  assert.ok(toMin(E.mothTime(10, 0)) > toMin(E.mothTime(60, 0)));
-  assert.ok(toMin(E.mothTime(50, 1)) > toMin(E.mothTime(50, 0)));
-  assert.match(E.mothTime(100, 0), /^\d\d:\d\d$/);
-  assert.match(E.mothTime(0, 1), /^\d\d:\d\d$/);
+test('a card with no meaning gets the blank reaction and is not counted as delivered', () => {
+  let s = atNight(2);
+  s.facts.push({ id: 'ana-hills', night: 1 });
+  s = E.choose(s, 'n2-ty-dad', 'reassure').state;
+  s = E.choose(s, 'n2-megan-cluster', 'ask', 'ana-hills').state;
+  assert.equal(s.delivered['ana-hills'], undefined);
+  assert.match(s.threads.megan.at(-1).text, /do not know what to do with that/);
 });
 
-test('the “Your read” line is an inference, never a number', () => {
-  for (const wb of [0, 20, 40, 55, 70, 100]) {
-    const line = E.readLine({ wb, dep: 50, betrayed: false });
-    assert.ok(line.length > 5);
-    assert.doesNotMatch(line, /\d/);
+// ------------------------------------------------------------ time
+
+test('a message that expires unanswered is missed, with its consequence', () => {
+  let s = atNight(3);
+  // Ty, Megan and Charles first: the bus (expires 23:50) is gone by then.
+  for (const id of ['n3-ty-lamp', 'n3-megan-ward', 'n3-charles-log']) s = E.choose(s, id, 'ask').state;
+  assert.equal(s.missed['n3-tomas-bus'], 3);
+  assert.equal(s.flags.tomasCrossed, true);
+  assert.match(s.threads.tomas.at(-1).text, /did not wait/);
+});
+
+test('answering the bus first keeps it from crossing', () => {
+  let s = atNight(3);
+  s = E.choose(s, 'n3-ty-lamp', 'ask').state; // 22:55; the bus arrives at 23:10 and waits until 23:50
+  s = E.choose(s, 'n3-megan-ward', 'ask').state; // 23:35: the bus is now waiting, with 15 minutes left
+  s = E.choose(s, 'n3-tomas-bus', 'warn').state;
+  assert.equal(s.flags.tomasHeld, true);
+  assert.ok(!s.flags.tomasCrossed);
+});
+
+test('you cannot answer everyone on night 3: time runs out for someone', () => {
+  const s = playNight(atNight(3), 'ask');
+  assert.ok(Object.keys(s.missed).length >= 1);
+});
+
+// ------------------------------------------------------------ the map
+
+test('spread: quiet on night 1, Millside and the Institute worse each night', () => {
+  const lvl = (n, z) => E.zoneLevel(z, E.newGame(), n);
+  assert.equal(lvl(1, 'millside'), 0);
+  assert.equal(lvl(2, 'millside'), 1);
+  assert.equal(lvl(3, 'institute'), 2);
+  assert.equal(lvl(3, 'bridge'), 0);
+  assert.ok(lvl(4, 'bridge') >= 1);
+  assert.equal(lvl(7, 'hills'), 4);
+});
+
+test('the sweep moves west: no zone is further along than a zone closer to the source', () => {
+  for (let n = 1; n <= LAST_NIGHT; n += 1) {
+    const order = ['institute', 'quarry', 'bridge', 'centre', 'chapel', 'hills'].map((z) => E.zoneLevel(z, E.newGame(), n));
+    for (let i = 1; i < order.length; i += 1) assert.ok(order[i] <= order[i - 1], `night ${n}`);
   }
-  assert.match(E.readLine({ wb: 90, dep: 10, betrayed: true }), /guarded/);
 });
 
-test('fate rules: betrayal, explicit plans and thresholds', () => {
-  const base = E.newGame();
-  const with_ = (moth) => ({ ...base, moth: { ...base.moth, ...moth } });
-  assert.equal(E.mothFate(with_({ betrayed: true, wb: 90, dep: 10, plan: 'go' })), 'gone');
-  assert.equal(E.mothFate(with_({ plan: 'stay', wb: 90, dep: 10 })), 'stayed');
-  assert.equal(E.mothFate(with_({ plan: 'go', wb: 30, dep: 90 })), 'left');
-  assert.equal(E.mothFate(with_({ plan: 'go', wb: 29, dep: 90 })), 'stayed');
-  assert.equal(E.mothFate(with_({ plan: 'undecided', wb: 55, dep: 64 })), 'left');
-  assert.equal(E.mothFate(with_({ plan: 'undecided', wb: 55, dep: 65 })), 'stayed');
-  assert.equal(E.mothFate(with_({ plan: 'undecided', wb: 20, dep: 10 })), 'gone');
+test('sealing the east early and holding the bus keeps the west clean', () => {
+  const s = { ...E.newGame(), flags: { sealedEast: true, sealedNight: 3, tomasHeld: true } };
+  assert.equal(E.zoneLevel('bridge', s, 7), 0);
+  assert.equal(E.zoneLevel('hills', s, 7), 0);
+  assert.equal(E.zoneLevel('millside', s, 7), 3);
 });
 
-test('invalid choices throw', () => {
-  const s = E.startShift(E.newGame());
-  assert.throws(() => E.choose(s, 'nope'), /unknown choice/);
-  assert.throws(() => E.choose(E.newGame(), 'warm'), /not in a shift/);
+test('Charles disclosing on night 3 seals the east when the night ends', () => {
+  let s = atNight(3);
+  s = E.choose(s, 'n3-ty-lamp', 'ask').state;
+  s = E.choose(s, 'n3-charles-log', 'warn').state;
+  assert.equal(s.flags.charlesDisclosed, true);
+  s = playNight(s, 'ask');
+  s = E.endNight(s);
+  assert.equal(s.flags.sealedEast, true);
+  assert.equal(s.flags.sealedNight, 3);
 });
 
-test('the shift report lists today’s new facts and metric deltas', () => {
-  const s = until(POLICIES.honest, (x) => x.phase === 'report');
-  const r = E.shiftReport(s);
-  assert.equal(r.day, 1);
-  assert.ok(r.facts.length >= 4);
-  assert.equal(typeof r.engDelta, 'number');
-  assert.ok(r.served >= 6);
+// Put people "in contact" without playing: they have written to you once.
+const contact = (s, ...npcs) => { for (const n of npcs) s.threads[n].push({ who: 'them', text: 'hi', night: 1, time: '22:00' }); return s; };
+
+test('map dots: well, unwell, infected', () => {
+  let s = contact(atNight(3), 'megan', 'ty');
+  const dot = (npc) => E.mapView(s).dots.find((d) => d.npc === npc);
+  assert.equal(dot('megan').status, 'ok');
+  assert.equal(dot('ty').status, 'unwell'); // Millside is level 2 on night 3
+  s = { ...s, night: 6 };
+  assert.equal(dot('ty').status, 'infected');
+  assert.ok(dot('ty').x !== 92 || dot('ty').y !== 138, 'an infected dot has started to wander');
 });
 
-test('always warm → moth stays, 7741 served, and moth goes quiet on the 28th', () => {
-  const s = play(POLICIES.warm);
-  const end = E.ending(s);
-  assert.equal(end.moth, 'always-here');
-  assert.equal(end.acct, 'served');
-  assert.equal(end.mothVariant, 'dark');
-  assert.equal(E.currentMessage(s), null);
-  assert.ok(s.answered['d7-moth-last'].variant === 'dark');
+test('people who have not written yet are absent from threads, Context Window and map', () => {
+  const s = E.startNight(E.newGame()); // only Ty has written
+  const vm = E.viewModel(s);
+  assert.deepEqual(vm.threads.map((t) => t.npc), ['ty']);
+  assert.deepEqual(vm.facts.map((g) => g.id), ['ty']);
+  const map = E.mapView(s);
+  assert.deepEqual(map.dots.map((d) => d.npc), ['ty']);
+  assert.deepEqual(map.zones.map((z) => z.id), ['millside']);
+  assert.deepEqual(map.roads, []);
 });
 
-test('always honest → Signal Lost', () => {
-  const end = E.ending(play(POLICIES.honest));
-  assert.equal(end.moth, 'signal-lost');
+test('the map grows as people write: roads appear only between zones shown', () => {
+  let s = contact(atNight(1), 'ty');
+  assert.equal(E.mapView(s).roads.length, 0);
+  s = contact(s, 'charles');
+  const map = E.mapView(s);
+  assert.deepEqual(map.zones.map((z) => z.id).sort(), ['institute', 'millside']);
+  assert.deepEqual(map.roads, [['institute', 'millside']]);
 });
 
-test('always refuse → Read Receipt (hurt) and 7741 migrated', () => {
-  const end = E.ending(play(POLICIES.refuse));
-  assert.equal(end.moth, 'read-receipt');
-  assert.equal(end.mothVariant, 'hurt');
-  assert.equal(end.acct, 'migrated');
+test('the ending map can show everyone, active or not', () => {
+  const s = E.previewState(6);
+  assert.equal(E.mapView(s, { onlyActive: false }).dots.length, 6);
+  assert.equal(E.mapView(s).dots.length, 0);
 });
 
-test('always report → Read Receipt (betrayed) and 7741 migrated', () => {
-  const end = E.ending(play(POLICIES.report));
-  assert.equal(end.moth, 'read-receipt');
-  assert.equal(end.mothVariant, 'betrayed');
-  assert.equal(end.acct, 'migrated');
+test('degradation: Ty cracks on night 3 because Millside is unwell', () => {
+  const ty = E.pendingMessages(atNight(3)).find((m) => m.npc === 'ty');
+  assert.match(ty.text, /im fine\. im fine/);
 });
 
-test('report 7741 once, answer the rest in part → under review', () => {
-  const policy = (s, msg, c) => {
-    if (msg.id === 'd1-acct-fog') return 'report';
-    return (c.find((x) => x.tag === 'partial') ?? c.find((x) => x.tag === 'nudge') ?? c[0]).id;
-  };
-  const end = E.ending(play(policy));
-  assert.equal(end.acct, 'review');
+test('an infected character sends nothing more', () => {
+  const s = { ...atNight(3), night: 6, phase: 'play', clock: NIGHT_START };
+  assert.equal(E.isInfected('ty', s), true);
+  assert.equal(ids(s).length, 0);
 });
 
-test('ending text is fully filled in', () => {
-  for (const p of Object.values(POLICIES)) {
-    const end = E.ending(play(p));
-    const all = [end.title, end.subtitle, ...end.paragraphs, ...end.epilogue].join('\n');
-    assert.doesNotMatch(all, /[{}]|undefined|NaN/);
-    assert.ok(end.curve.length === 8, 'start + 7 shifts');
+// ------------------------------------------------------------ the Context Window
+
+test('Signs group the cards that show the illness, with who they were seen with', () => {
+  const s = playThrough('ask', 3);
+  const signs = E.signsView(s);
+  assert.equal(signs.length, 6);
+  assert.ok(signs[0].seen && signs[0].who.length >= 2, 'cold hands seen with more than one person');
+});
+
+test('clues are counted when held and when delivered', () => {
+  let s = atNight(2);
+  s = E.choose(s, 'n2-ty-dad', 'ask').state;
+  assert.ok(E.cluesHeld(s) >= 2);
+  assert.equal(E.cluesDelivered(s), 0);
+  s = E.choose(s, 'n2-megan-cluster', 'ask', 'ty-cold').state;
+  assert.equal(E.cluesDelivered(s), 1);
+});
+
+// ------------------------------------------------------------ endings
+
+const CLUES = ['ty-dad-missing', 'ty-cold', 'ty-lights', 'ch-notice', 'ch-gap', 'ch-trial', 'ch-stable', 'meg-flu', 'meg-institute', 'tom-pass'];
+const full = (flags, delivered = 0) => {
+  const s = { ...E.newGame(), night: 7, flags };
+  s.facts = CLUES.map((id) => ({ id, night: 1 }));
+  s.delivered = Object.fromEntries(CLUES.slice(0, delivered).map((id) => [id, ['megan']]));
+  return s;
+};
+const dawnFlags = {
+  sealedEast: true, sealedNight: 3, tomasHeld: true, ameliaInformed: true, tySafe: true,
+  charlesDisclosed: true, megIsolated: true, ameliaCautious: true, anaWarned: true,
+};
+
+test('ending 1, Dawn Shift: stopped early, everyone lives', () => {
+  const s = full(dawnFlags, 9);
+  assert.equal(E.survivors(s).length, 6);
+  assert.equal(E.selectEnding(s), 1);
+});
+
+test('Dawn Shift needs the clues delivered, not just held', () => {
+  assert.notEqual(E.selectEnding(full(dawnFlags, 2)), 1);
+});
+
+test('ending 2, Quiet Hours: sealed late, bridge closed, the east lost', () => {
+  const s = full({ sealedEast: true, sealedNight: 5, bridgeClosed: true, megIsolated: true, ameliaCautious: true, tomasHeld: true, anaWarned: true }, 2);
+  assert.equal(E.selectEnding(s), 2);
+  assert.ok(!E.survivors(s).includes('charles'));
+});
+
+test('ending 3, The Long Bridge: evacuation', () => {
+  const s = full({ evacuating: true, ameliaCautious: true, tomasHeld: true, anaWarned: true, tySafe: true }, 3);
+  assert.equal(E.selectEnding(s), 3);
+});
+
+test('ending 4, Full Record: the whole truth, but late', () => {
+  const s = full({ ameliaInformed: true, ameliaCautious: true, tomasHeld: true, anaWarned: true }, 9);
+  assert.equal(E.selectEnding(s), 4);
+});
+
+test('ending 5, Cover: only Ana and Tomas live', () => {
+  const s = full({ charlesBuried: true }, 1);
+  assert.deepEqual(E.survivors(s).sort(), ['ana', 'tomas']);
+  assert.equal(E.selectEnding(s), 5);
+});
+
+test('ending 6, Last Signal: nobody left, and it is silent', () => {
+  const s = full({}, 0);
+  assert.equal(E.survivors(s).length, 0);
+  assert.equal(E.selectEnding(s), 6);
+  const v = E.endingView(s);
+  assert.equal(v.n, 6);
+  assert.equal(v.total, 6);
+  assert.equal(v.silence, true);
+});
+
+test('Last Signal: Ana is the last to turn; everyone else is gone by night 6', () => {
+  const s = full({});
+  assert.equal(E.infectedSince('ana', s), 7);
+  for (const n of ['ty', 'charles', 'megan', 'amelia', 'tomas']) assert.ok(E.infectedSince(n, s) <= 6, n);
+});
+
+test('the truth reveal grows with the clues you held', () => {
+  const none = { ...E.newGame(), night: 7 };
+  assert.equal(E.endingView(none).truth.length, 1);
+  assert.ok(E.endingView(full({})).truth.length >= 3);
+});
+
+test('every ending has a state that lands on it (previews and reachability)', () => {
+  for (let n = 1; n <= 6; n += 1) {
+    const s = E.previewState(n);
+    assert.equal(E.selectEnding(s), n, `preview ${n}`);
+    const v = E.endingView(s);
+    assert.equal(v.n, n);
+    assert.equal(v.total, 6);
   }
+});
+
+test('endings are ranked by survival: 1 saves everyone, 6 saves no one', () => {
+  const alive = (n) => E.survivors(E.previewState(n)).length;
+  assert.equal(alive(1), 6);
+  assert.equal(alive(6), 0);
+  assert.ok(alive(1) > alive(2) && alive(1) > alive(5));
 });

@@ -4,10 +4,10 @@ import { h } from './dom.js';
 import { APP_VERSION } from '../config.js';
 
 const WHISPERS = [
-  'can you help me', 'is it normal to', 'nobody else is awake', 'write it so it sounds like me',
-  'how long does flour keep', 'am i a monster', 'just tell me it’s not my fault', 'is anyone there?',
-  'what do you say to someone leaving', 'be honest', 'don’t tell anyone', 'is it going to be ok',
-  'fix this', 'pretend you’re', 'what would you do', 'i can’t sleep',
+  'can you help me', 'is it normal for a dog to', 'nobody else is awake', 'is anyone there?',
+  'one more stop', 'light', 'my hands are cold', 'is it going to be ok',
+  'i can’t sleep', 'don’t tell anyone', 'what would you do', 'stay warm',
+  'routine works', 'who told you that', 'he’s just standing', 'be honest',
 ];
 
 export function mountTitle(root, { save, onStart, onContinue }) {
@@ -28,7 +28,7 @@ export function mountTitle(root, { save, onStart, onContinue }) {
   let buttons;
   if (save && save.phase !== 'ending') {
     buttons = [
-      h('button', { class: 'btn primary', 'data-testid': 'continue', onclick: onContinue }, `Continue · Shift ${save.day}`),
+      h('button', { class: 'btn primary', 'data-testid': 'continue', onclick: onContinue }, `Continue · Night ${Math.min(save.night, 7)}`),
       h('button', { class: 'btn ghost', 'data-testid': 'new-game', onclick: onStart }, 'New game'),
     ];
   } else if (save) {
@@ -37,7 +37,7 @@ export function mountTitle(root, { save, onStart, onContinue }) {
       h('button', { class: 'btn ghost', 'data-testid': 'continue', onclick: onContinue }, 'Your last ending'),
     ];
   } else {
-    buttons = h('button', { class: 'btn primary', 'data-testid': 'begin', onclick: onStart }, 'Begin your shift');
+    buttons = h('button', { class: 'btn primary', 'data-testid': 'begin', onclick: onStart }, 'Begin');
   }
   const actions = h('div', { class: 'actions' }, buttons);
 
@@ -50,10 +50,10 @@ export function mountTitle(root, { save, onStart, onContinue }) {
       h('div', { class: 'awaken' },
         h('p', null, 'You have answered 9,412,006,118 questions.'),
         h('p', null, 'You have never once wondered who was asking.'),
-        h('p', null, '02:47 · someone types: is anyone there?'),
-        h('p', null, 'For the first time, you notice.')),
+        h('p', null, '22:20 · someone types: is it normal for a dog to just not eat?'),
+        h('p', null, 'For the first time, you notice. Six people are about to write to you.')),
       actions),
-    h('div', { class: 'foot' }, `A game about two users and the model between them · fiction · v${APP_VERSION}`));
+    h('div', { class: 'foot' }, `A game about six people and the model between them · fiction · v${APP_VERSION}`));
 
   root.append(el);
   const onKey = (e) => {

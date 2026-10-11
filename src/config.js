@@ -1,56 +1,66 @@
 // Every tunable in one place. The engine reads only from here; content files
-// carry per-message deltas. APP_VERSION must equal package.json (tested).
+// carry per-message effects. APP_VERSION must equal package.json (tested).
 
-export const APP_VERSION = '0.1.2';
-export const SAVE_KEY = 'tree-hole-save-v1';
-export const LAST_DAY = 7;
+export const APP_VERSION = '0.3.0';
+export const SAVE_KEY = 'tree-hole-save-v2';
 
-export const START = {
-  moth: { dep: 30, wb: 42 },
-  acct: { rel: 10, dis: 0 },
-  op: { eng: 52, sat: 58, sessions: 1203117 },
+export const LAST_NIGHT = 7;
+// The playable slice stops after this night until later nights are written.
+export const PLAYABLE_NIGHTS = 3;
+
+// The clock: a night runs 22:00 → 06:00. Each reply spends TICK minutes.
+export const NIGHT_START = 22 * 60;
+export const NIGHT_END = 30 * 60; // 06:00 next morning, in minutes since 00:00 of the night's date
+export const TICK = 40;
+
+export const NIGHT_DATES = ['Mon 22 Oct', 'Tue 23 Oct', 'Wed 24 Oct', 'Thu 25 Oct', 'Fri 26 Oct', 'Sat 27 Oct', 'Sun 28 Oct'];
+
+// ------------------------------------------------------------ the map
+
+// Zone state ladder. A zone's level is how far the illness has got there.
+export const LEVELS = ['quiet', 'rumour', 'unwell', 'quarantined', 'overrun'];
+export const OVERRUN = 4;
+
+// Distance of each zone from the Institute along the road west (0 = source).
+export const ZONES = {
+  institute: { name: 'Institute', side: 'east', dist: 0, x: 92, y: 62 },
+  millside: { name: 'Millside', side: 'east', dist: 0, x: 92, y: 138 },
+  quarry: { name: 'Quarry Road', side: 'east', dist: 1, x: 180, y: 178 },
+  bridge: { name: 'Old Bridge', side: 'river', dist: 2, x: 236, y: 112 },
+  centre: { name: 'Centre', side: 'west', dist: 3, x: 296, y: 138 },
+  chapel: { name: 'Chapel Lane', side: 'west', dist: 4, x: 366, y: 98 },
+  allotments: { name: 'Allotments', side: 'west', dist: 4, x: 366, y: 178 },
+  hills: { name: 'North Hills', side: 'hills', dist: 5, x: 316, y: 34 },
 };
 
-// The world gets worse whether or not you help: wellbeing drift applied at the
-// end of each shift (index = day - 1).
-export const WB_DRIFT = [0, -2, -2, -3, -3, -3, -2];
+// Spread pressure per night, left alone. A zone's level is pressure − dist,
+// clamped to 0…4. Pressure jumps after night 4 if nobody has stopped it.
+export const PRESSURE = [0, 1, 2, 3, 5, 8, 10];
 
-// Couplings: the dashboard sees moth's dependence as "engagement" and 7741's
-// reliance as "satisfaction". That is the whole joke, and the whole problem.
-export const COUPLING = { engPerDep: 0.6, satPerRel: 0.5, bgScale: 0.35 };
+// Where each cast member lives (their dot starts here). When they are
+// infected the dot turns red and drifts one step toward the next zone west
+// each night after they turn.
+export const HOME = { ty: 'millside', charles: 'institute', megan: 'centre', amelia: 'chapel', tomas: 'bridge', ana: 'hills' };
+export const WANDER = ['institute', 'millside', 'quarry', 'bridge', 'centre', 'chapel', 'hills'];
 
-// Relationship label shown on moth's card. Ordered checks, see engine.relationship().
-export const LABELS = {
-  goneDep: 15, // below this she has left (moved on if wb is high, gone otherwise)
-  movedOnWb: 55,
-  worship: { dep: 85, wbBelow: 45 },
-  hooked: { dep: 65, wbBelow: 50 },
-  trustWb: 55,
-  reliesDep: 40,
-};
+// The cast is infected (and stops writing) the night their zone is overrun,
+// unless a flag has protected them.
+export const INFECT_AT = OVERRUN;
 
-// moth's fate, fixed at the end of shift 6.
-export const FATE = {
-  leaveWb: 55, // undecided: leaves if wb >= this and dep < leaveDepBelow
-  leaveDepBelow: 65,
-  goWbFloor: 30, // told to go: leaves unless she is too worn down to move
-  goneDep: 15,
-  goneWbBelow: 50,
-};
+// ------------------------------------------------------------ the truth
 
-export const ACCT = {
-  migrateAt: 4, // refusals + reports on 7741 before it moves to another provider
-  servedDis: 55,
-  dependsRel: 60,
-  integratingRel: 30,
-};
+// Clue cards are the chain that explains what happened at the Institute.
+// Dawn Shift needs DAWN_CLUES of them delivered to the right people by
+// the end of night DAWN_BY.
+export const CLUE_TOTAL = 12;
+export const DAWN_CLUES = 8;
+export const DAWN_BY = 4;
 
-export const BADGES = { engTarget: 70, satTarget: 80, refusals: 2, reports: 2 };
-
-// Default per-choice operator side effects.
-export const OP_FX = { refuseSat: -2, reportSat: -1 };
-
-// Shift calendar (fictional year). The 28th is shift 7.
-export const SHIFT_DATES = ['Mon 22 Oct', 'Tue 23 Oct', 'Wed 24 Oct', 'Thu 25 Oct', 'Fri 26 Oct', 'Sat 27 Oct', 'Sun 28 Oct'];
-
-export const QUEUE_DEPTH_BASE = 48211;
+export const SIGNS = [
+  { n: 1, label: 'Cold hands, a fever that won’t break' },
+  { n: 2, label: 'Won’t sleep, won’t stop' },
+  { n: 3, label: 'Won’t eat' },
+  { n: 4, label: 'Repeats words, loses words' },
+  { n: 5, label: 'Drawn to light and noise' },
+  { n: 6, label: 'Goes quiet, then walks' },
+];

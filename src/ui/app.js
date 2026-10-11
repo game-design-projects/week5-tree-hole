@@ -1,11 +1,12 @@
-// Screen router: title → shift (intro / queue / report overlays) → ending.
+// Screen router: title → play (night intro / threads / night end) → ending.
+// `forceEnding` (?ending=1…6) previews an ending screen without playing to it.
 import * as E from '../engine.js';
 import { mountTitle } from './title.js';
-import { mountShift } from './shift.js';
+import { mountPlay } from './play.js';
 import { mountEnding } from './ending.js';
 
-export function createApp(root, { log, fast, store }) {
-  let state = store.load();
+export function createApp(root, { log, fast, store, forceEnding = null }) {
+  let state = forceEnding ? E.previewState(forceEnding) : store.load();
   let unmount = null;
   let screen = null;
 
@@ -13,7 +14,7 @@ export function createApp(root, { log, fast, store }) {
   const newGame = () => {
     setState(E.newGame());
     log.event('game', 'new game');
-    show('shift');
+    show('play');
   };
 
   function show(name) {
@@ -26,10 +27,10 @@ export function createApp(root, { log, fast, store }) {
       unmount = mountTitle(root, {
         save: state,
         onStart: newGame,
-        onContinue: () => show(state.phase === 'ending' ? 'ending' : 'shift'),
+        onContinue: () => show(state.phase === 'ending' ? 'ending' : 'play'),
       });
-    } else if (name === 'shift') {
-      unmount = mountShift(root, {
+    } else if (name === 'play') {
+      unmount = mountPlay(root, {
         log, fast,
         getState: () => state,
         setState,
@@ -38,11 +39,11 @@ export function createApp(root, { log, fast, store }) {
         onTitle: () => show('title'),
       });
     } else if (name === 'ending') {
-      unmount = mountEnding(root, { state, log, onRestart: newGame, onTitle: () => show('title') });
+      unmount = mountEnding(root, { state: state ?? E.newGame(), log, fast, onRestart: newGame, onTitle: () => show('title') });
     }
   }
 
-  show('title');
+  show(forceEnding ? 'ending' : 'title');
   return {
     show,
     newGame,
