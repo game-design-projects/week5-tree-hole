@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
 import { LAST_NIGHT, NIGHT_START, TICK } from '../src/config.js';
-import { atNight, playNight, playThrough } from './helpers.js';
+import { atNight, carefulPlayer, playNight, playThrough } from './helpers.js';
 
 const ids = (s) => E.pendingMessages(s).map((m) => m.id);
 
@@ -55,10 +55,76 @@ test('night 1 plays out and hands over to night 2', () => {
   assert.equal(s.phase, 'intro');
 });
 
-test('the playable slice ends after night 3', () => {
-  const s = playThrough('reassure', 3);
+test('the playable slice ends after night 4', () => {
+  const s = playThrough('reassure');
   assert.equal(s.phase, 'slice');
-  assert.equal(s.night, 4);
+  assert.equal(s.night, 5);
+});
+
+// ------------------------------------------------------------ night 4: the bridge
+
+test('night 4: bridge decision closes or opens the bridge (and the bus text knows what you did)', () => {
+  const text = (flags) => E.pendingMessages(atNight(4, flags)).find((m) => m.npc === 'tomas')?.text ?? '';
+  const advance = (s) => E.choose(s, 'n4-ty-street', 'ask').state;
+  let s = advance(atNight(4, { tomasHeld: true }));
+  assert.match(E.messageFor(s, 'tomas').text, /parked at the bridge like you said/);
+  s = advance(atNight(4, { tomasCrossed: true }));
+  assert.match(E.messageFor(s, 'tomas').text, /dropped the mill people/);
+  s = advance(atNight(4, {}));
+  assert.match(E.messageFor(s, 'tomas').text, /still at stop 14/);
+  assert.equal(text({}), '', 'the bus has not arrived yet at 22:10');
+  s = E.choose(advance(atNight(4, { tomasHeld: true })), 'n4-tomas-bridge', 'close').state;
+  assert.equal(s.flags.bridgeClosed, true);
+  s = E.choose(advance(atNight(4, { tomasHeld: true })), 'n4-tomas-bridge', 'evac').state;
+  assert.equal(s.flags.evacuating, true);
+  assert.ok(!s.flags.bridgeClosed);
+});
+
+test('night 4: Charles can seal the east from inside; it seals the zone at night end', () => {
+  let s = atNight(4, { charlesDisclosed: true });
+  s = playNight(s, (m) => (m.id === 'n4-charles-gate' ? 'seal' : m.options.find((o) => o.stance === 'ask')));
+  assert.equal(s.flags.eastGateSealed, true);
+  assert.equal(s.flags.charlesStays, true);
+});
+
+test('night 4: you cannot answer everyone; someone is missed', () => {
+  const s = carefulPlayer(null, 4);
+  assert.ok(Object.values(s.missed).some((n) => n === 4));
+});
+
+test('night 4: the truth on air needs either a decision or a strong card', () => {
+  let s = atNight(4, { ameliaInformed: true });
+  s = E.choose(s, 'n4-ty-street', 'ask').state;
+  s.clock = E.hm('23:15');
+  s = E.choose(s, 'n4-amelia-air', 'truth').state;
+  assert.equal(s.flags.ameliaTruth, true);
+  let t = atNight(4, {});
+  t.facts.push({ id: 'ch-trial', night: 3 });
+  t = E.choose(t, 'n4-ty-street', 'ask').state;
+  t.clock = E.hm('23:15');
+  t = E.choose(t, 'n4-amelia-air', 'ask', 'ch-trial').state;
+  assert.equal(t.flags.ameliaTruth, true);
+});
+
+// ------------------------------------------------------------ policies
+
+test('a careful player (warn, spend cards, answer what expires first) gets the east sealed in time and the bus held', () => {
+  const s = carefulPlayer(null, 4);
+  assert.ok(s.flags.sealedEast && s.flags.sealedNight <= 4, JSON.stringify(s.flags));
+  assert.equal(s.flags.tomasHeld, true);
+  assert.ok(!s.flags.tomasCrossed);
+  assert.ok(E.cluesDelivered(s) >= 8, `delivered ${E.cluesDelivered(s)} clues`);
+  assert.equal(s.flags.ameliaTruth, true);
+});
+
+test('Dawn Shift is reachable by play: a careful run through night 4 lands on ending 1', () => {
+  assert.equal(E.selectEnding(carefulPlayer(null, 4)), 1);
+});
+
+test('a careless player (reassure, no cards) never reaches Dawn Shift and loses people', () => {
+  const s = carefulPlayer(null, 4, { stance: 'reassure', cards: false });
+  assert.notEqual(E.selectEnding(s), 1);
+  assert.ok(E.survivors(s).length < 6);
 });
 
 // ------------------------------------------------------------ cards
@@ -223,7 +289,7 @@ const full = (flags, delivered = 0) => {
 };
 const dawnFlags = {
   sealedEast: true, sealedNight: 3, tomasHeld: true, ameliaInformed: true, tySafe: true,
-  charlesDisclosed: true, megIsolated: true, ameliaCautious: true, anaWarned: true,
+  charlesDisclosed: true, megIsolated: true, ameliaCautious: true, anaWarned: true, ameliaTruth: true,
 };
 
 test('ending 1, Dawn Shift: stopped early, everyone lives', () => {

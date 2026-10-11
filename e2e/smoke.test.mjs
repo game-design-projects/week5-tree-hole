@@ -22,10 +22,10 @@ test('title → night 1: the first thread is waiting, no errors', async () => {
   await context.close();
 });
 
-test('nights 1–3 play to "to be continued" through the real UI', async () => {
+test('nights 1–4 play to "to be continued" through the real UI', async () => {
   const { page, errors, context } = await open(env);
   await page.click(tid('begin'));
-  for (let night = 1; night <= 3; night++) {
+  for (let night = 1; night <= 4; night++) {
     await playNight(page, 'ask');
     await page.click(tid('end-night'));
   }
@@ -63,12 +63,20 @@ test('messages decrypt: noise first, then the real text', async () => {
   const { page, context } = await open(env, { query: '' }); // animations on
   await page.click(tid('begin'));
   await page.waitForSelector(tid('start-night'));
+  // Record the first text the message ever shows, the moment it is inserted.
+  await page.evaluate(() => {
+    window.__first = null;
+    new MutationObserver(() => {
+      const p = document.querySelector('.bubble.pending p');
+      if (p && window.__first == null) window.__first = p.textContent;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
   await page.click(tid('start-night'));
-  const sel = '.bubble.pending p';
-  await page.waitForSelector(sel);
-  const during = await page.textContent(sel);
-  assert.doesNotMatch(during, /^hi\. random question$/, 'text is scrambled at first');
-  await page.waitForFunction((q) => document.querySelector(q)?.textContent === 'hi. random question', sel, { timeout: 4000 });
+  await page.waitForFunction(() => window.__first != null);
+  const first = await page.evaluate(() => window.__first);
+  assert.notEqual(first, 'hi. random question', 'text is scrambled when it first appears');
+  assert.equal(first.length, 'hi. random question'.length, 'same length, so the layout does not jump');
+  await page.waitForFunction(() => document.querySelector('.bubble.pending p')?.textContent === 'hi. random question', null, { timeout: 4000 });
   await context.close();
 });
 

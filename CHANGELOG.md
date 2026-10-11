@@ -16,7 +16,8 @@ Story rework, branch `story-relay`. See [docs/STORY_PLAN.md](docs/STORY_PLAN.md)
 - A clock: every reply costs time, and some messages expire. You cannot answer everyone.
 - Six repeating signs of the illness, collected under **Signs** in the Context Window.
 - Six numbered endings, best to worst (Dawn Shift … Last Signal), with an "Ending N of 6" counter; the worst is silence. `?ending=1…6` previews one.
-- Playable slice: nights 1–3 (Ty, Megan, Charles, Tomas, Amelia, Ana). Nights 4–7 are not written yet.
+- Playable slice: nights 1–4 (Ty, Megan, Charles, Tomas, Amelia, Ana). Nights 5–7 are not written yet.
+- Night 4, "The bridge": Charles can seal East Block from inside, Megan locks the ward or runs, Tomas closes the bridge or runs an evacuation, Amelia tells the truth on air or keeps it vague, Ana decides who gets through her gate. Dawn Shift now also needs the truth told on air. All 12 clue cards are in play, and a test checks that Dawn Shift is reachable (8 clues delivered by careful play).
 
 ### Removed
 

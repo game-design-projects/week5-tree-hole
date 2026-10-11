@@ -6,7 +6,7 @@ export const SAVE_KEY = 'tree-hole-save-v2';
 
 export const LAST_NIGHT = 7;
 // The playable slice stops after this night until later nights are written.
-export const PLAYABLE_NIGHTS = 3;
+export const PLAYABLE_NIGHTS = 4;
 
 // The clock: a night runs 22:00 → 06:00. Each reply spends TICK minutes.
 export const NIGHT_START = 22 * 60;

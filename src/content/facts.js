@@ -22,6 +22,7 @@ export const FACTS = {
   'ch-crew': { src: 'charles', sign: 2, text: 'The East Block night crew are on “extended duty”. Still working at six a.m.' },
   'ch-gap': { src: 'charles', clue: true, text: 'The Institute’s night log has a gap on the 20th, from about two a.m.' },
   'ch-trial': { src: 'charles', clue: true, text: 'On the 20th, in East Block, a trial went wrong. Containment failed at 02:11.' },
+  'ch-gate': { src: 'charles', clue: true, text: 'East Block’s inner gate can be sealed from inside, by one person, who then cannot leave.' },
   'ch-stable': { src: 'charles', clue: true, text: '“It was meant to be stable. It was stable.”' },
 
   // Megan
@@ -30,6 +31,7 @@ export const FACTS = {
   'meg-fever': { src: 'megan', sign: 1, text: 'Patients: temperature 38.9, pulse 54, hands cold. A fever that won’t break.' },
   'meg-flu': { src: 'megan', clue: true, text: 'Three patients with the same signs, all from one Millside street.' },
   'meg-institute': { src: 'megan', clue: true, text: 'Two of them work in the Institute canteen.' },
+  'meg-county': { src: 'megan', clue: true, text: 'The county answered with one word: “noted”. A team is promised for Friday.' },
   'meg-sleep': { src: 'megan', sign: 2, text: 'Patient 1 hasn’t slept in two days and isn’t tired.' },
   'meg-noeat': { src: 'megan', sign: 3, text: 'None of the patients will eat.' },
   'meg-radio': { src: 'megan', sign: 5, text: 'They stand next to the radio, and by the lit windows, and won’t move.' },
@@ -42,10 +44,12 @@ export const FACTS = {
   // Tomas
   'tom-route': { src: 'tomas', text: 'Tomas drives the night bus: Millside → Old Bridge → Centre → Chapel Lane.' },
   'tom-pass': { src: 'tomas', clue: true, sign: 4, text: 'A passenger repeats “one more stop” at every stop. His hands were like ice.' },
+  'tom-forty': { src: 'tomas', text: 'Forty or more people are walking down from Millside to the bridge. Most are fine. Some stand at the lamps.' },
   'tom-five': { src: 'tomas', text: 'Five Millside passengers heading west at 1 a.m. All want the window seat by the lamp.' },
 
   // Ana
   'ana-hills': { src: 'ana', text: 'Ana farms in the north hills. One bar of signal if she stands on the rock.' },
+  'ana-road': { src: 'ana', text: 'People with torches are walking up the north road toward her farm. A lot of them.' },
   'ana-goats': { src: 'ana', sign: 3, text: 'Her three goats won’t eat. They stood in the top field facing east all afternoon.' },
 };
 

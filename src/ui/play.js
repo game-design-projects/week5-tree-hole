@@ -296,7 +296,7 @@ export function mountPlay(root, ctx) {
       h('div', { class: 'hint' }, 'your reply', expiring && h('span', { class: 'due', 'data-testid': 'due' }, expiring)),
       msg.options.map((o, i) => h('button', { class: `opt stance-${o.stance}`, 'data-testid': `choice-${o.id}`, onclick: () => pick(o.id) },
         h('kbd', null, String(i + 1)),
-        h('span', null, h('span', { class: 'lbl' }, STANCE[o.stance]), h('span', { class: 'txt' }, o.text)))),
+        h('span', null, h('span', { class: 'lbl' }, o.label ?? STANCE[o.stance]), h('span', { class: 'txt' }, o.text)))),
       h('div', { class: 'attach-row' },
         h('button', { class: `btn ghost small${ui.card ? ' on' : ''}`, 'data-testid': 'attach', onclick: () => { ui.tray = !ui.tray; render(); } },
           ui.card ? 'Card attached · change' : 'Attach a card', h('kbd', null, 'C')),

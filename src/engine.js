@@ -259,7 +259,7 @@ export function endNight(s0) {
   if (s0.phase !== 'nightEnd') return s0;
   const s = clone(s0);
   const f = s.flags;
-  if (!f.sealedEast && (f.charlesDisclosed || (f.megCalled && f.megKnowsInstitute))) {
+  if (!f.sealedEast && (f.charlesDisclosed || f.eastGateSealed || (f.megCalled && f.megKnowsInstitute))) {
     f.sealedEast = true;
     f.sealedNight = s.night;
   }
@@ -324,7 +324,7 @@ export function selectEnding(s) {
   const alive = survivors(s);
   if (alive.length === 0) return 6;
   const dawn = f.sealedEast && f.sealedNight <= DAWN_BY && f.tomasHeld && !f.tomasCrossed
-    && f.ameliaInformed && cluesDelivered(s) >= DAWN_CLUES && alive.length === CAST_IDS.length;
+    && f.ameliaTruth && cluesDelivered(s) >= DAWN_CLUES && alive.length === CAST_IDS.length;
   if (dawn) return 1;
   if (f.charlesBuried && !f.ameliaInformed) return 5;
   if (f.sealedEast && f.bridgeClosed) return 2;
@@ -351,7 +351,7 @@ export function endingView(s) {
 // A last-night state that lands on ending n, for previews (?ending=n) and tests.
 const SAVED = { tySafe: true, charlesDisclosed: true, megIsolated: true, ameliaCautious: true, tomasHeld: true, anaWarned: true };
 const PREVIEW_FLAGS = {
-  1: { ...SAVED, sealedEast: true, sealedNight: 3, ameliaInformed: true },
+  1: { ...SAVED, sealedEast: true, sealedNight: 3, ameliaInformed: true, ameliaTruth: true },
   2: { ...SAVED, charlesDisclosed: false, sealedEast: true, sealedNight: 5, bridgeClosed: true },
   3: { ...SAVED, charlesDisclosed: false, evacuating: true, megIsolated: false },
   4: { ...SAVED, charlesDisclosed: false, ameliaInformed: true, tySafe: false },

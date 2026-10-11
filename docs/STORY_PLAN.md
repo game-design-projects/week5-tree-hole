@@ -1,6 +1,6 @@
 # Tree Hole — story rework (proposal, not yet built)
 
-Status: draft for review. No code has changed. Supersedes the moth / acct_7741 plot in DESIGN.md if approved.
+Status: in progress on the `story-relay` branch. Nights 1–4 are written and playable; nights 5–7 are not. Supersedes the moth / acct_7741 plot.
 
 ## Premise
 

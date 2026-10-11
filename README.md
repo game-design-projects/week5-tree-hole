@@ -4,7 +4,7 @@
 
 You can only reply a few ways. What you say, and which facts you carry from one person to another, decides how it ends.
 
-> Status: story rework on the `story-relay` branch. Nights 1–3 are playable; nights 4–7 and the rest of the content are not written yet. The earlier moth / acct_7741 version is the `main` branch.
+> Status: story rework on the `story-relay` branch. Nights 1–4 are playable; nights 5–7 are not written yet. The earlier moth / acct_7741 version is the `main` branch.
 
 NYU CS-GY 6553 Game Design. All content is pre-written; the game makes no API calls.
 
