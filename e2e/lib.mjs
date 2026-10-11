@@ -47,9 +47,10 @@ export async function open(env, { viewport = { width: 1280, height: 720 }, query
 // `stance` (reassure | ask | warn | hold) until the night-end card appears.
 export async function playNight(page, stance = 'ask') {
   for (let i = 0; i < 80; i++) {
-    if (await page.$(tid('night-end'))) return;
+    if (await page.$(tid('night-end')) || await page.$(tid('ending')) || await page.$(tid('silence'))) return;
     if (await page.$(tid('intro'))) { await page.click(tid('start-night')); continue; }
     if (await page.$(`${tid('next')}:not([disabled])`)) { await page.click(tid('next')); continue; }
+    if (await page.$(tid('witness'))) { await page.click(tid('witness')); continue; }
     if (await page.$(tid('composer'))) {
       const pick = (await page.$(`.opt.stance-${stance}`)) ?? (await page.$('.opt'));
       await pick.click();

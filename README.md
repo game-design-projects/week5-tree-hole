@@ -4,7 +4,7 @@
 
 You can only reply a few ways. What you say, and which facts you carry from one person to another, decides how it ends.
 
-> Status: story rework on the `story-relay` branch. Nights 1–4 are playable; nights 5–7 are not written yet. The earlier moth / acct_7741 version is the `main` branch.
+> Status: the full story is playable, nights 1–7 and all six endings. It lives on the `story-relay-complete` branch. The earlier moth / acct_7741 version is the `main` branch.
 
 NYU CS-GY 6553 Game Design. All content is pre-written; the game makes no API calls.
 
@@ -21,6 +21,7 @@ Seven nights, 22:00 to 06:00. People write to you; you pick whom to answer. Ever
 - **The cast:** Ty (Millside, east), Charles (the Institute), Megan (the clinic), Amelia (the radio, west), Tomas (the night bus) and Ana (the hills). Each writes differently, and their writing falls apart as the illness takes hold.
 - **The map:** Varrow's zones go from quiet to overrun. Each person is a dot, and infected ones turn red and walk toward light and noise. An infected person stops writing to you.
 - **The Context Window:** everything you have learned, one card per fact, grouped by who told you, plus **Signs**: the six repeating signs of the illness and who showed them. The game never connects the cards for you.
+- **Last messages:** someone who turns writes one last message, falling apart as they go. You can read it but not answer it. After that they stop writing and their dot turns red.
 - **Endings:** six, numbered best to worst, from *Dawn Shift* (stopped early, nobody turned) to *Last Signal* (silence). Which one you reach depends on what reached whom, and when.
 
 ## Development

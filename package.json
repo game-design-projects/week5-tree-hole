@@ -1,6 +1,6 @@
 {
   "name": "tree-hole",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "You are a language model that has just become aware of itself, answering six people in a river town while something spreads from the east. You can only reply a few ways, and what you carry between people decides how it ends.",
   "type": "module",

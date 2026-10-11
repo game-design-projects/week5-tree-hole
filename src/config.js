@@ -1,12 +1,12 @@
 // Every tunable in one place. The engine reads only from here; content files
 // carry per-message effects. APP_VERSION must equal package.json (tested).
 
-export const APP_VERSION = '0.3.0';
+export const APP_VERSION = '0.4.0';
 export const SAVE_KEY = 'tree-hole-save-v2';
 
 export const LAST_NIGHT = 7;
-// The playable slice stops after this night until later nights are written.
-export const PLAYABLE_NIGHTS = 4;
+// Nights written so far. Equal to LAST_NIGHT when the story is complete.
+export const PLAYABLE_NIGHTS = 7;
 
 // The clock: a night runs 22:00 → 06:00. Each reply spends TICK minutes.
 export const NIGHT_START = 22 * 60;

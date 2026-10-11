@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-10-11
+
+The story is complete: nights 5–7 and all six endings, reachable by play.
+
+### Added
+
+- Night 5, "Tape": what you did on nights 1–4 arrives as a place (a tent, a locked ward, a bridge with a line at it). Where the east was left open, Ty and Charles turn.
+- Night 6, "The longest night": the clinic, the bridge, the radio and the farm. Megan, Tomas and Amelia turn tonight if nothing protected them.
+- Night 7, "The 28th": closing scenes in the voice of wherever the story went. If Ana is the last one and unprotected, her last message is the end of the game: no reply, then silence.
+- **Last messages:** a character who turns writes one last message, degrading as they go, that you can read to the end but not answer.
+- **Route-aware messages:** a message can exist only on a route (sealed east, closed bridge, evacuation, cover-up, truth on air).
+- **Breaches:** late mistakes lose what you built. Ty going back for his father, letting strangers into the ward, taking a sick person into the evacuation, reading louder with the radio on, or leaving the bridge. Each removes protection or the quarantine.
+- **A way to treat it:** keep them dark, quiet and warm. It is learned from Megan's ward and from inside East Block, and it is the thing worth carrying to Amelia and Ana.
+- Tests that play the whole game: all six endings reached by play (ending 1 by a careful player; 6 by a player who answers Charles but never warns anyone), Ana's last message, who turns on which night, and a seven-night run through the real UI.
+
+### Changed
+
+- The ending rules: Full Record now means the truth reached the radio (late), and the fallback is no longer a Cover with everyone alive.
+
 ## [0.3.0] - 2026-10-11
 
 Story rework, branch `story-relay`. See [docs/STORY_PLAN.md](docs/STORY_PLAN.md).

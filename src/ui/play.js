@@ -2,7 +2,7 @@
 // (right), plus the night intro and end-of-night overlays. All rules live in the
 // engine; this file renders viewModel() and forwards the player's choice.
 import * as E from '../engine.js';
-import { APP_VERSION, LAST_NIGHT, PLAYABLE_NIGHTS } from '../config.js';
+import { APP_VERSION, LAST_NIGHT } from '../config.js';
 import { CAST, FACTS } from '../content/index.js';
 import { fill, h, lines } from './dom.js';
 import { renderMap } from './map.js';
@@ -83,6 +83,21 @@ export function mountPlay(root, ctx) {
     ui.tray = false;
     ui.tab = 'chat';
     reveal();
+  }
+
+  // Their last words: nothing to answer. You read them and the night moves on.
+  function witnessMsg() {
+    const before = state();
+    const msg = ui.sel ? E.messageFor(before, ui.sel) : null;
+    if (!msg || msg.options.length) return;
+    const { state: next } = E.witness(before, msg.id);
+    ctx.setState(next);
+    log.event('witness', msg.id, { night: next.night });
+    ui.outcome = null;
+    ui.card = null;
+    ui.tray = false;
+    selectDefault(true);
+    render();
   }
 
   // Show your reply at once, then their reaction(s) after a typing pause.
@@ -282,6 +297,12 @@ export function mountPlay(root, ctx) {
   }
 
   function composerFor(msg, s) {
+    if (!msg.options.length) {
+      return h('footer', { class: 'composer', 'data-testid': 'composer' },
+        h('div', { class: 'after' },
+          h('span', { class: 'hint' }, 'there is nothing to answer'),
+          h('button', { class: 'btn primary', 'data-testid': 'witness', onclick: witnessMsg }, 'Read to the end', h('kbd', null, '⏎'))));
+    }
     const held = s.facts.map((f) => f.id);
     const expiring = msg.expiresMin != null && msg.expiresMin - s.clock <= 90 ? `answer by ${E.clockLabel(msg.expiresMin)}` : null;
     const tray = ui.tray && h('div', { class: 'tray', 'data-testid': 'tray' },
@@ -330,8 +351,11 @@ export function mountPlay(root, ctx) {
     overlay?.remove();
     overlay = null;
     if (s.phase === 'intro') overlay = introCard(vm);
-    else if (s.phase === 'nightEnd' && !ui.outcome) overlay = nightEndCard(vm, s);
-    else if (s.phase === 'slice') overlay = sliceCard(s);
+    else if (s.phase === 'nightEnd' && !ui.outcome) {
+      // After the last night there is no morning card: the ending follows at once.
+      if (s.night >= LAST_NIGHT) { queueMicrotask(endNight); return; }
+      overlay = nightEndCard(vm, s);
+    }
     if (overlay) {
       el.append(overlay);
       overlay.querySelector('.btn.primary')?.focus({ preventScroll: true });
@@ -365,20 +389,7 @@ export function mountPlay(root, ctx) {
           learned.length
             ? h('ul', { class: 'learned' }, learned.map((f) => h('li', { class: `tone-${f.src}` }, f.text)))
             : h('p', { class: 'ctx-empty' }, 'Nothing new.')),
-        h('div', { class: 'go' }, h('button', { class: 'btn primary', 'data-testid': 'end-night', onclick: endNight }, s.night >= PLAYABLE_NIGHTS ? 'Close the night ⏎' : 'Next night ⏎'))));
-  }
-
-  function sliceCard(s) {
-    const vm = E.viewModel(s);
-    return h('div', { class: 'overlay', role: 'dialog', 'aria-modal': 'true', 'data-testid': 'slice' },
-      h('div', { class: 'card' },
-        h('div', { class: 'eyebrow' }, `Nights 1–${PLAYABLE_NIGHTS} of ${LAST_NIGHT}`),
-        h('h2', null, 'To be continued'),
-        h('p', { class: 'lede' }, 'This is as far as the story has been written. Nights 4–7, the rest of the cast, and the six endings follow.'),
-        h('section', null, h('div', { class: 'mapbox in-card' }, renderMap(vm.map))),
-        h('div', { class: 'go' },
-          h('button', { class: 'btn ghost', onclick: () => ctx.onTitle() }, 'Title screen'),
-          h('button', { class: 'btn primary', 'data-testid': 'play-again', onclick: () => ctx.onNewGame() }, 'Play again'))));
+        h('div', { class: 'go' }, h('button', { class: 'btn primary', 'data-testid': 'end-night', onclick: endNight }, 'Next night ⏎'))));
   }
 
   // ------------------------------------------------------------ keys
@@ -396,6 +407,7 @@ export function mountPlay(root, ctx) {
     if (s.phase !== 'play') return;
     const msg = ui.sel ? E.messageFor(s, ui.sel) : null;
     if (!msg) return;
+    if (!msg.options.length) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); witnessMsg(); } return; }
     if (e.key.toLowerCase() === 'c') { ui.tray = !ui.tray; render(); return; }
     const i = Number(e.key) - 1;
     if (Number.isInteger(i) && msg.options[i]) { e.preventDefault(); pick(msg.options[i].id); }

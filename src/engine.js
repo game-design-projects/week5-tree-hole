@@ -56,17 +56,21 @@ const messagesOf = (s) => nightDef(s.night)?.messages ?? [];
 // How far the illness has got in a zone on a given night (0 quiet … 4 overrun).
 export function zoneLevel(zone, s, night = s.night) {
   const z = ZONES[zone];
-  const p = PRESSURE[clamp(night, 1, LAST_NIGHT) - 1];
-  let level = clamp(p - z.dist, 0, LEVELS.length - 1);
   const f = s.flags;
+  const p = PRESSURE[clamp(night, 1, LAST_NIGHT) - 1];
+  // A breached evacuation (a sick person taken in) brings the illness to the west and hills sooner.
+  const dist = f.evacBreach && night > f.evacBreachNight && z.dist >= 3 ? z.dist - 3 : z.dist;
+  let level = clamp(p - dist, 0, LEVELS.length - 1);
   if (f.sealedEast && night > f.sealedNight) {
     const early = f.sealedNight <= DAWN_BY;
+    const breached = f.breach && night > f.breachNight;
     if (z.side === 'east') {
-      // Sealed in time, the east is quarantined, not overrun. Sealed late, it is lost.
-      if (early) level = Math.min(level, 3);
+      // Sealed in time, the east is quarantined, not overrun. Sealed late, or breached, it is lost.
+      if (early && !breached) level = Math.min(level, 3);
     } else {
       let cap = early ? (f.tomasHeld && !f.tomasCrossed ? 0 : 1) : 2;
       if (f.bridgeClosed && z.side !== 'river') cap = Math.min(cap, 1);
+      if (breached) cap = Math.max(cap, 2); // the line failed: the west is unwell, though not yet lost
       level = Math.min(level, cap);
     }
   }
@@ -76,8 +80,12 @@ export function zoneLevel(zone, s, night = s.night) {
 // An NPC who is protected survives their zone being overrun (they listened).
 const PROTECTED_BY = { ty: 'tySafe', charles: 'charlesDisclosed', megan: 'megIsolated', amelia: 'ameliaCautious', tomas: 'tomasHeld', ana: 'anaWarned' };
 
+// Late choices that take that protection away again.
+const LOST_BY = { ty: ['tyBreach'], megan: ['megOpened', 'megAbandons'], amelia: ['ameliaLoud'], charles: ['charlesLeaves'], tomas: ['tomasLeaves'] };
+
 function isProtected(npc, s) {
   const f = s.flags;
+  if ((LOST_BY[npc] ?? []).some((k) => f[k])) return false;
   // The cover-up: if Charles's version stood and the west was never told, only
   // those who happened to be out of town are spared.
   if (f.charlesBuried && !f.ameliaInformed) return npc === 'ana' || npc === 'tomas';
@@ -153,7 +161,14 @@ export function resolveMessage(msg, s) {
   return merged;
 }
 
-const open = (m, s) => !s.answered[m.id] && !s.missed[m.id] && !isInfected(m.npc, s);
+// A message is waiting if it is unanswered, its route condition holds, and its writer
+// is well; a `final` message instead belongs to the night its writer turns.
+const open = (m, s) => {
+  if (s.answered[m.id] || s.missed[m.id]) return false;
+  if (m.when && !m.when(s)) return false;
+  const infected = isInfected(m.npc, s);
+  return m.final ? infected && infectedSince(m.npc, s) === s.night : !infected;
+};
 
 export function pendingMessages(s) {
   if (s.phase !== 'play') return [];
@@ -174,7 +189,7 @@ function addEntry(s, npc, entry) {
 // Messages that were not answered before they expired are lost.
 function sweepMissed(s) {
   for (const m of messagesOf(s)) {
-    if (!m.expires || s.answered[m.id] || s.missed[m.id] || hm(m.at) > s.clock) continue;
+    if (!m.expires || !open(m, s) || hm(m.at) > s.clock) continue;
     if (s.clock <= hm(m.expires)) continue;
     s.missed[m.id] = s.night;
     Object.assign(s.flags, m.missed?.set ?? {});
@@ -224,6 +239,7 @@ export function choose(s0, msgId, optId, cardId = null) {
   for (const id of pending.facts ?? []) addFact(s, id);
   for (const id of opt.facts ?? []) addFact(s, id);
   Object.assign(s.flags, opt.set ?? {});
+  stampBreaches(s);
 
   const entries = [{ who: 'you', kind: opt.stance, text: opt.text }];
   addEntry(s, pending.npc, { who: 'you', kind: opt.stance, text: opt.text });
@@ -245,6 +261,7 @@ export function choose(s0, msgId, optId, cardId = null) {
       s.delivered[cardId] = [...new Set([...(s.delivered[cardId] ?? []), pending.npc])];
       for (const id of hit.facts ?? []) addFact(s, id);
       Object.assign(s.flags, hit.set ?? {});
+      stampBreaches(s);
     }
   }
 
@@ -252,6 +269,29 @@ export function choose(s0, msgId, optId, cardId = null) {
   s.clock = Math.max(s.clock, pending.atMin) + TICK;
   settle(s);
   return { state: s, outcome: { msgId, npc: pending.npc, optId, card: cardId, delivered, entries } };
+}
+
+// Remember the night a quarantine or an evacuation was breached.
+function stampBreaches(s) {
+  if (s.flags.breach && s.flags.breachNight == null) s.flags.breachNight = s.night;
+  if (s.flags.evacBreach && s.flags.evacBreachNight == null) s.flags.evacBreachNight = s.night;
+}
+
+// Some messages cannot be answered (a character's last words). You read them and time moves on.
+export function witness(s0, msgId) {
+  if (s0.phase !== 'play') throw new Error('not playing');
+  const pending = pendingMessages(s0).find((m) => m.id === msgId);
+  if (!pending) throw new Error(`message ${msgId} is not waiting`);
+  if (pending.options.length) throw new Error(`${msgId} can be answered`);
+  const s = clone(s0);
+  addEntry(s, pending.npc, { who: 'them', text: pending.text, time: clockLabel(pending.atMin), msgId });
+  for (const id of pending.facts ?? []) addFact(s, id);
+  Object.assign(s.flags, pending.set ?? {});
+  stampBreaches(s);
+  s.answered[msgId] = { opt: null, card: null, night: s.night };
+  s.clock = Math.max(s.clock, pending.atMin) + TICK;
+  settle(s);
+  return { state: s, outcome: { msgId, npc: pending.npc, optId: null, card: null, delivered: false, entries: [], silent: true } };
 }
 
 // Close the night: seal-off flags are derived, then the next night begins.
@@ -265,8 +305,8 @@ export function endNight(s0) {
   }
   s.night += 1;
   s.clock = NIGHT_START;
-  if (s.night > PLAYABLE_NIGHTS) s.phase = 'slice';
-  else if (s.night > LAST_NIGHT) s.phase = 'ending';
+  if (s.night > LAST_NIGHT) s.phase = 'ending';
+  else if (s.night > PLAYABLE_NIGHTS) s.phase = 'slice';
   else s.phase = 'intro';
   return s;
 }
@@ -294,7 +334,7 @@ export function viewModel(s) {
     const last = entries.filter((e) => e.who === 'them').at(-1);
     return {
       npc, ...CAST[npc], stage: stageOf(npc, s), infected,
-      state: infected ? 'silent' : msg ? 'pending' : 'idle',
+      state: msg ? 'pending' : infected ? 'silent' : 'idle',
       msgId: msg?.id ?? null, time: msg ? clockLabel(msg.atMin) : last?.time ?? '',
       preview: msg ? msg.text.split('\n')[0] : last?.text.split('\n')[0] ?? 'not in contact yet',
     };
@@ -323,14 +363,14 @@ export function selectEnding(s) {
   const f = s.flags;
   const alive = survivors(s);
   if (alive.length === 0) return 6;
-  const dawn = f.sealedEast && f.sealedNight <= DAWN_BY && f.tomasHeld && !f.tomasCrossed
+  const dawn = f.sealedEast && !f.breach && f.sealedNight <= DAWN_BY && f.tomasHeld && !f.tomasCrossed
     && f.ameliaTruth && cluesDelivered(s) >= DAWN_CLUES && alive.length === CAST_IDS.length;
   if (dawn) return 1;
-  if (f.charlesBuried && !f.ameliaInformed) return 5;
-  if (f.sealedEast && f.bridgeClosed) return 2;
-  if (f.evacuating) return 3;
-  if (f.ameliaInformed && cluesDelivered(s) >= DAWN_CLUES) return 4;
-  return 5;
+  if (f.charlesBuried && !f.ameliaInformed) return 5; // the cover-up stood
+  if (f.sealedEast && f.bridgeClosed) return 2; // the east was lost, the west held
+  if (f.evacuating) return 3; // the bridge stayed open on purpose
+  if (f.ameliaInformed) return 4; // the truth was told, late, and help came
+  return 5; // nobody was told in time, and not everyone is left
 }
 
 export function endingView(s) {

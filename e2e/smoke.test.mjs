@@ -22,15 +22,36 @@ test('title → night 1: the first thread is waiting, no errors', async () => {
   await context.close();
 });
 
-test('nights 1–4 play to "to be continued" through the real UI', async () => {
-  const { page, errors, context } = await open(env);
-  await page.click(tid('begin'));
-  for (let night = 1; night <= 4; night++) {
-    await playNight(page, 'ask');
-    await page.click(tid('end-night'));
+test('seven nights play to an ending through the real UI (including last messages)', async () => {
+  for (const stance of ['ask', 'warn']) {
+    const { page, errors, context } = await open(env);
+    await page.click(tid('begin'));
+    let sawWitness = false;
+    for (let night = 1; night <= 7; night++) {
+      await playNight(page, stance);
+      if (await page.$(tid('ending'))) break;
+      await page.click(tid('end-night'));
+    }
+    await page.waitForSelector(tid('ending'));
+    assert.match(await page.textContent(tid('ending-counter')), /^Ending \d of 6/);
+    assert.deepEqual(errors, [], stance);
+    await context.close();
   }
-  await page.waitForSelector(tid('slice'));
-  assert.deepEqual(errors, []);
+});
+
+test('a character who turns writes a last message you can only read to the end', async () => {
+  const { page, context } = await open(env);
+  await page.evaluate(() => {
+    const { engine: E, store } = window.__th;
+    // Night 5 with nobody protected: Ty turns tonight.
+    store.save(E.startNight({ ...E.newGame(), night: 5, phase: 'intro', flags: {} }));
+  });
+  await page.reload();
+  await page.click(tid('continue'));
+  assert.equal(await page.$(tid('choice-dark')), null, 'no replies on a last message');
+  assert.match(await page.textContent(tid('log')), /hi dad/);
+  await page.click(tid('witness'));
+  assert.equal(await page.getAttribute(tid('thread-ty'), 'data-state'), 'silent');
   await context.close();
 });
 

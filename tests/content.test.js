@@ -32,6 +32,10 @@ test('message ids are unique and every message is well formed', () => {
     assert.ok(Number.isFinite(hm(m.at)), `${m.id}: at`);
     if (m.expires) assert.ok(hm(m.expires) > hm(m.at), `${m.id}: expires after it arrives`);
     assert.ok(m.text.trim(), `${m.id}: text`);
+    if (m.final) {
+      assert.equal(m.options.length, 0, `${m.id}: a character's last words cannot be answered`);
+      continue;
+    }
     assert.ok(m.options.length >= 2 && m.options.length <= 3, `${m.id}: 2–3 replies`);
     assert.equal(typeof m.blank, 'string', `${m.id}: blank reaction for a card with no meaning`);
     for (const f of m.facts ?? []) assert.ok(FACTS[f], `${m.id}: fact ${f}`);

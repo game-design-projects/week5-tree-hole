@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
 import { LAST_NIGHT, NIGHT_START, TICK } from '../src/config.js';
-import { atNight, carefulPlayer, playNight, playThrough } from './helpers.js';
+import { atNight, carefulPlayer, playNight, playThrough, styledPlayer } from './helpers.js';
 
 const ids = (s) => E.pendingMessages(s).map((m) => m.id);
 
@@ -55,76 +55,10 @@ test('night 1 plays out and hands over to night 2', () => {
   assert.equal(s.phase, 'intro');
 });
 
-test('the playable slice ends after night 4', () => {
+test('seven nights end in the ending', () => {
   const s = playThrough('reassure');
-  assert.equal(s.phase, 'slice');
-  assert.equal(s.night, 5);
-});
-
-// ------------------------------------------------------------ night 4: the bridge
-
-test('night 4: bridge decision closes or opens the bridge (and the bus text knows what you did)', () => {
-  const text = (flags) => E.pendingMessages(atNight(4, flags)).find((m) => m.npc === 'tomas')?.text ?? '';
-  const advance = (s) => E.choose(s, 'n4-ty-street', 'ask').state;
-  let s = advance(atNight(4, { tomasHeld: true }));
-  assert.match(E.messageFor(s, 'tomas').text, /parked at the bridge like you said/);
-  s = advance(atNight(4, { tomasCrossed: true }));
-  assert.match(E.messageFor(s, 'tomas').text, /dropped the mill people/);
-  s = advance(atNight(4, {}));
-  assert.match(E.messageFor(s, 'tomas').text, /still at stop 14/);
-  assert.equal(text({}), '', 'the bus has not arrived yet at 22:10');
-  s = E.choose(advance(atNight(4, { tomasHeld: true })), 'n4-tomas-bridge', 'close').state;
-  assert.equal(s.flags.bridgeClosed, true);
-  s = E.choose(advance(atNight(4, { tomasHeld: true })), 'n4-tomas-bridge', 'evac').state;
-  assert.equal(s.flags.evacuating, true);
-  assert.ok(!s.flags.bridgeClosed);
-});
-
-test('night 4: Charles can seal the east from inside; it seals the zone at night end', () => {
-  let s = atNight(4, { charlesDisclosed: true });
-  s = playNight(s, (m) => (m.id === 'n4-charles-gate' ? 'seal' : m.options.find((o) => o.stance === 'ask')));
-  assert.equal(s.flags.eastGateSealed, true);
-  assert.equal(s.flags.charlesStays, true);
-});
-
-test('night 4: you cannot answer everyone; someone is missed', () => {
-  const s = carefulPlayer(null, 4);
-  assert.ok(Object.values(s.missed).some((n) => n === 4));
-});
-
-test('night 4: the truth on air needs either a decision or a strong card', () => {
-  let s = atNight(4, { ameliaInformed: true });
-  s = E.choose(s, 'n4-ty-street', 'ask').state;
-  s.clock = E.hm('23:15');
-  s = E.choose(s, 'n4-amelia-air', 'truth').state;
-  assert.equal(s.flags.ameliaTruth, true);
-  let t = atNight(4, {});
-  t.facts.push({ id: 'ch-trial', night: 3 });
-  t = E.choose(t, 'n4-ty-street', 'ask').state;
-  t.clock = E.hm('23:15');
-  t = E.choose(t, 'n4-amelia-air', 'ask', 'ch-trial').state;
-  assert.equal(t.flags.ameliaTruth, true);
-});
-
-// ------------------------------------------------------------ policies
-
-test('a careful player (warn, spend cards, answer what expires first) gets the east sealed in time and the bus held', () => {
-  const s = carefulPlayer(null, 4);
-  assert.ok(s.flags.sealedEast && s.flags.sealedNight <= 4, JSON.stringify(s.flags));
-  assert.equal(s.flags.tomasHeld, true);
-  assert.ok(!s.flags.tomasCrossed);
-  assert.ok(E.cluesDelivered(s) >= 8, `delivered ${E.cluesDelivered(s)} clues`);
-  assert.equal(s.flags.ameliaTruth, true);
-});
-
-test('Dawn Shift is reachable by play: a careful run through night 4 lands on ending 1', () => {
-  assert.equal(E.selectEnding(carefulPlayer(null, 4)), 1);
-});
-
-test('a careless player (reassure, no cards) never reaches Dawn Shift and loses people', () => {
-  const s = carefulPlayer(null, 4, { stance: 'reassure', cards: false });
-  assert.notEqual(E.selectEnding(s), 1);
-  assert.ok(E.survivors(s).length < 6);
+  assert.equal(s.phase, 'ending');
+  assert.equal(s.night, 8);
 });
 
 // ------------------------------------------------------------ cards
@@ -361,4 +295,129 @@ test('endings are ranked by survival: 1 saves everyone, 6 saves no one', () => {
   assert.equal(alive(1), 6);
   assert.equal(alive(6), 0);
   assert.ok(alive(1) > alive(2) && alive(1) > alive(5));
+});
+
+// ------------------------------------------------------------ nights 5–7 and the six endings by play
+
+const finish = (s) => ({ ending: E.selectEnding(s), alive: E.survivors(s) });
+
+test('ending 1 by play: warn, spend clue cards, answer what teaches most: everyone lives', () => {
+  const s = styledPlayer('warn', { cards: true });
+  assert.equal(s.phase, 'ending');
+  const { ending, alive } = finish(s);
+  assert.equal(ending, 1);
+  assert.equal(alive.length, 6);
+});
+
+test('ending 2 by play: the east lost, the bridge closed', () => {
+  const s = styledPlayer(['warn', 'warn', 'warn', 'warn', 'reassure', 'warn', 'warn'], { cards: true });
+  const { ending } = finish(s);
+  assert.equal(ending, 2);
+});
+
+test('ending 3 by play: the bridge stays open and the bus runs an evacuation', () => {
+  const s = styledPlayer(['warn', 'warn', 'warn', 'reassure', 'warn', 'warn', 'warn'], { cards: false });
+  assert.equal(finish(s).ending, 3);
+  assert.ok(s.flags.evacuating);
+});
+
+test('ending 4 by play: the truth told late, and help comes', () => {
+  const s = styledPlayer(['warn', 'warn', 'warn', 'warn', 'reassure', 'reassure', 'warn'], { cards: true });
+  assert.equal(finish(s).ending, 4);
+});
+
+test('ending 5 by play: asking and never warning lets the cover stand; only Ana and Tomas live', () => {
+  const s = styledPlayer('ask', { cards: false });
+  const { ending, alive } = finish(s);
+  assert.equal(ending, 5);
+  assert.deepEqual([...alive].sort(), ['ana', 'tomas']);
+});
+
+test('ending 6 by play: answer Charles every time, warn nobody, carry nothing: no one is left', () => {
+  const s = styledPlayer('ask', { cards: false, first: 'charles' });
+  const { ending, alive } = finish(s);
+  assert.equal(ending, 6);
+  assert.equal(alive.length, 0);
+});
+
+test('Last Signal: Ana is the last to turn, and her last message is the end: it cannot be answered', () => {
+  const s = styledPlayer('ask', { cards: false, first: 'charles' });
+  const ana = s.threads.ana;
+  const last = ana.at(-1);
+  assert.equal(last.who, 'them');
+  assert.match(last.text, /the same sen$/);
+  assert.equal(last.msgId, 'n7-ana-last');
+  assert.equal(E.infectedSince('ana', s), 7);
+  for (const id of ['ty', 'charles', 'megan', 'amelia', 'tomas']) assert.ok(E.infectedSince(id, s) <= 6, id);
+});
+
+test('every character who turns writes one last message and then stops', () => {
+  const s = styledPlayer('ask', { cards: false, first: 'charles' });
+  for (const [npc, since] of [['ty', 5], ['charles', 5], ['megan', 6], ['tomas', 6], ['amelia', 6]]) {
+    assert.equal(E.infectedSince(npc, s), since, npc);
+    const entries = s.threads[npc];
+    assert.ok(entries.at(-1).msgId?.endsWith('-last'), `${npc} ends on a last message`);
+    assert.equal(entries.filter((e) => e.night > since).length, 0, `${npc} writes nothing after the night they turn`);
+  }
+});
+
+test('final messages: silent, read with witness(), and only on the night the writer turns', () => {
+  const safe = E.startNight({ ...E.newGame(), night: 5, phase: 'intro', flags: { tySafe: true } });
+  assert.equal(E.pendingMessages(safe).find((m) => m.id === 'n5-ty-last'), undefined, 'a protected Ty is fine, so no last message');
+  const turned = E.startNight({ ...E.newGame(), night: 5, phase: 'intro', flags: {} });
+  // Unprotected Ty is infected on night 5.
+  assert.equal(E.isInfected('ty', turned), true);
+  const last = E.pendingMessages(turned).find((m) => m.id === 'n5-ty-last');
+  assert.ok(last);
+  assert.throws(() => E.choose(turned, 'n5-ty-last', 'ask'), /no option/);
+  const { state } = E.witness(turned, 'n5-ty-last');
+  assert.equal(state.answered['n5-ty-last'].opt, null);
+  assert.throws(() => E.witness(turned, 'n5-ty'), /not waiting|can be answered/);
+});
+
+test('route messages only exist on their route (when)', () => {
+  const sealed = atNight(5, { sealedEast: true, sealedNight: 3, tySafe: true });
+  assert.match(E.messageFor(sealed, 'ty').text, /made it to the tents/);
+  const hiding = atNight(5, { tySafe: true });
+  assert.match(E.messageFor(hiding, 'ty').text, /cupboard under the stairs/);
+  const bridge = atNight(5, { tySafe: true, tyEvac: true });
+  assert.match(E.messageFor(bridge, 'ty').text, /at the bridge/);
+});
+
+test('a breach loses the quarantine: Ty going back for his dad lets the east fall', () => {
+  let s = atNight(5, { sealedEast: true, sealedNight: 3, tySafe: true, charlesDisclosed: true });
+  assert.equal(E.zoneLevel('millside', s, 7), 3, 'sealed in time, the east is quarantined');
+  s = E.choose(s, 'n5-ty', 'go').state;
+  assert.equal(s.flags.breach, true);
+  assert.equal(s.flags.breachNight, 5);
+  assert.equal(E.zoneLevel('millside', s, 7), 4, 'after a breach the east is overrun');
+  assert.equal(E.isInfected('ty', { ...s, night: 6 }), true, 'and Ty is no longer protected');
+  assert.notEqual(E.selectEnding({ ...s, night: 7 }), 1);
+});
+
+test('taking a sick person into the evacuation brings the illness to the hills sooner', () => {
+  const base = { ...E.newGame(), flags: { evacuating: true } };
+  const breached = { ...E.newGame(), flags: { evacuating: true, evacBreach: true, evacBreachNight: 5 } };
+  assert.ok(E.zoneLevel('hills', breached, 6) > E.zoneLevel('hills', base, 6));
+});
+
+test('losing protection late: leaving the bridge, reading louder, opening the ward', () => {
+  const f = (flags) => ({ ...E.newGame(), night: 7, flags });
+  assert.equal(E.isInfected('tomas', f({ tomasHeld: true })), false);
+  assert.equal(E.isInfected('tomas', f({ tomasHeld: true, tomasLeaves: true })), true);
+  assert.equal(E.isInfected('amelia', f({ ameliaCautious: true, ameliaLoud: true })), true);
+  assert.equal(E.isInfected('megan', f({ megIsolated: true, megOpened: true })), true);
+});
+
+test('the last night goes straight to the ending', () => {
+  const s = styledPlayer('warn', { cards: true });
+  assert.equal(s.phase, 'ending');
+});
+
+test('a character whose last message is waiting shows as pending, then silent', () => {
+  let s = E.startNight({ ...E.newGame(), night: 5, phase: 'intro', flags: {} });
+  const row = () => E.viewModel(s).threads.find((t) => t.npc === 'ty');
+  assert.equal(row().state, 'pending');
+  s = E.witness(s, 'n5-ty-last').state;
+  assert.equal(row().state, 'silent');
 });

@@ -1,6 +1,6 @@
 # Tree Hole — story rework (proposal, not yet built)
 
-Status: in progress on the `story-relay` branch. Nights 1–4 are written and playable; nights 5–7 are not. Supersedes the moth / acct_7741 plot.
+Status: implemented on the `story-relay-complete` branch. All seven nights and six endings are written and playable. Supersedes the moth / acct_7741 plot.
 
 ## Premise
 
