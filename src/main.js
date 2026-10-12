@@ -1,29 +1,35 @@
-// Entry point. URL flags: ?debug=1 (verbose [tag] logs), ?fast=1 (no typing
-// delays or intro animation; used by e2e), ?ending=1…6 (preview an ending; add &silence=1 for ending 6's opening silence), ?tutorial=1|0 (force or skip the tutorial).
+// Entry point. URL flags:
+//   ?debug=1          verbose [tag] logs
+//   ?fast=1           no typing delays or animations (used by e2e); skips going live
+//   ?ending=<id>      preview an ending: good-all, good-some, good-none, bad-all, bad-some, bad-none
+//   ?llm=<url>        use this LLM proxy instead of config.LLM_ENDPOINT; ?llm=0 forces offline play
+//   ?offline=1        no network at all: no proxy, no weather, no city search
+//   ?boot=0|1         skip or force the going-live sequence
 // window.__th is the e2e/debug hook.
 import * as engine from './engine.js';
-import { APP_VERSION } from './config.js';
+import { APP_VERSION, LLM_ENDPOINT } from './config.js';
 import { createLog } from './log.js';
 import { createStore } from './save.js';
+import { createLLM } from './llm.js';
 import { createApp } from './ui/app.js';
 
 const params = new URLSearchParams(location.search);
 const debug = params.get('debug') === '1';
 const fast = params.get('fast') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const offline = params.get('offline') === '1';
 if (fast) document.documentElement.classList.add('fast');
 
 const log = createLog(debug);
 const store = createStore(log);
-log.event('boot', `Tree Hole v${APP_VERSION}`, { debug, fast });
+const llmParam = params.get('llm');
+const endpoint = offline || llmParam === '0' ? '' : llmParam ?? LLM_ENDPOINT;
+const llm = createLLM({ endpoint, log });
+log.event('boot', `Tree Hole v${APP_VERSION}`, { debug, fast, offline, llm: endpoint ? 'configured' : 'offline' });
 
-const ending = Number(params.get('ending'));
-const forceEnding = ending >= 1 && ending <= 6 ? ending : null;
-// A preview skips ending 6's opening silence (it is 4.5 s of black that reads as a hang); &silence=1 keeps it.
-const previewSilence = params.get('silence') === '1';
+const ending = params.get('ending');
+const forceEnding = engine.ENDING_IDS.includes(ending) ? ending : null;
+const boot = params.get('boot') === '1' || (params.get('boot') !== '0' && !(fast && params.get('boot') == null));
 
-// The tutorial shows the first time unless disabled: ?tutorial=0 off, ?tutorial=1 always, and never with ?fast=1.
-const tut = params.get('tutorial');
-const tutorial = tut === '1' ? 'always' : tut === '0' || fast ? null : 'first';
-
-const app = createApp(document.getElementById('app'), { log, fast, store, forceEnding, previewSilence, tutorial });
-window.__th = { app, engine, store, version: APP_VERSION };
+llm.ping();
+const app = createApp(document.getElementById('app'), { log, fast, store, llm, offline, boot, forceEnding });
+window.__th = { app, engine, store, llm, version: APP_VERSION };

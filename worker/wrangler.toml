@@ -1,0 +1,20 @@
+# Tree Hole LLM proxy. Deploy from this folder:
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler deploy
+# then set LLM_ENDPOINT in src/config.js to the worker's URL.
+name = "tree-hole-llm"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+MODEL = "claude-haiku-5-5"
+# ALLOWED_ORIGINS = "https://example.com"   # itch.io and localhost are always allowed
+
+# 30 replies a minute per IP (per Cloudflare location). Needs wrangler 4.36+.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60

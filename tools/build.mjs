@@ -3,7 +3,7 @@
 // dist/ is a self-contained static site (index.html at the root, relative
 // paths). `butler push dist stevenli-phoenix-work/tree-hole:html5` publishes it.
 import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -28,7 +28,7 @@ export async function build({ outDir = join(ROOT, 'dist') } = {}) {
   for (const item of RUNTIME) {
     await cp(join(ROOT, item), join(outDir, item), {
       recursive: true,
-      filter: (src) => !/\.test\.(m?js)$/.test(src) && !src.endsWith('.DS_Store'),
+      filter: (src) => !/\.test\.(m?js)$/.test(src) && !basename(src).startsWith('.'),
     });
   }
   const { bytes, files } = await dirSize(outDir);

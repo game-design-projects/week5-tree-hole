@@ -1,33 +1,32 @@
-// Tree Hole engine. Pure functions over a plain JSON state: no DOM, no clock,
-// no randomness. The UI renders viewModel() / mapView() / endingView() and
-// calls startNight / choose / endNight. Content is data (src/content/*).
-//
-// The model of the story: every night six people write to you. A reply is one
-// of a few written stances, optionally with a Context Window card attached; the
-// card is delivered to that person and they react. Replies set flags; flags
-// shape how far the illness has spread (zoneLevel) and who is still alive.
-
+// The rules. Pure functions over a plain JSON state: every action returns a new
+// state and never mutates the one it was given. The UI renders viewModel() and
+// calls respond(); the LLM layer (llm.js) only ever produces the arguments.
 import {
-  CLUE_TOTAL, DAWN_BY, DAWN_CLUES, HOME, INFECT_AT, LAST_NIGHT, LEVELS, NIGHT_DATES, NIGHT_END,
-  NIGHT_START, PLAYABLE_NIGHTS, PRESSURE, SIGNS, TICK, WANDER, ZONES,
+  DAWN, DEFLECT_CALMS, REPORTS_TO_SEAL, EARLY_BY, EXPOSURE_BY_LEAK, HOME, INFECT_AT, INQUIRY_AT, KNOWS, LAST_NIGHT, LEAK_LEVELS,
+  LEVELS, NIGHT_DATES, NIGHT_START, PANIC_AT, PRESSURE, SAVE_VERSION, SHUTDOWN_AT, SUS_BY_LEAK, TICK,
+  UNEASE_BY_LEAK, WANDER, WARY_AT, ZONES,
 } from './config.js';
-import { CAST, CAST_IDS, ENDINGS, ENDING_COUNT, FACTS, FACT_SOURCES, NIGHTS, TRUTH, clueIds } from './content/index.js';
+import { CANNED, CAST, CAST_IDS, NIGHTS, INQUIRIES, THREAD_IDS, WHO, VERDICTS } from './content/index.js';
 
 const clone = (s) => JSON.parse(JSON.stringify(s));
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-// Deterministic choice between alternate scripts: a string, or an array of strings.
+function hash(s, key) {
+  let h = 2166136261 ^ (s.seed ?? 0);
+  for (let i = 0; i < key.length; i += 1) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+// A script is a string or an array of alternates; the seed picks one per key, so a
+// run always reads the same and different runs read differently.
 export function pickScript(s, key, value) {
   if (!Array.isArray(value)) return value;
-  let hsh = 2166136261 ^ (s.seed ?? 0);
-  for (let i = 0; i < key.length; i += 1) hsh = Math.imul(hsh ^ key.charCodeAt(i), 16777619);
-  return value[(hsh >>> 0) % value.length];
+  return value[hash(s, key) % value.length];
 }
 
 // ---------------------------------------------------------------- time
 
-// "22:20" → minutes since 22:00's calendar day; hours before 12 belong to the
-// small hours of the next morning.
+// "22:40" → minutes since 00:00 of the night's date ("01:10" is 25:10).
 export function hm(str) {
   const [h, m] = str.split(':').map(Number);
   return (h < 12 ? h + 24 : h) * 60 + m;
@@ -40,89 +39,67 @@ export function clockLabel(minutes) {
 
 // ---------------------------------------------------------------- state
 
-// `seed` picks between the alternate scripts a message can have, so replays differ. It is
-// part of the saved state, so a run reads the same way every time it is loaded.
 export function newGame(seed = 0) {
   return {
-    v: 2,
+    v: SAVE_VERSION,
     seed: seed >>> 0,
-    convo: {}, // msgId → { path: [optId, …] } for conversations that are mid-way
     night: 1,
-    phase: 'intro', // intro → play → nightEnd → (next night) intro … → slice | ending
+    phase: 'intro', // intro → play → nightEnd → (next night) intro … → ending
     clock: NIGHT_START,
     flags: {},
-    facts: [], // [{ id, night }]
-    delivered: {}, // factId → [npc, …] (only deliveries that meant something)
-    threads: Object.fromEntries(CAST_IDS.map((id) => [id, []])),
-    answered: {}, // msgId → { opt, card, night }
-    missed: {}, // msgId → night
-    log: [], // notes shown at the start of the next night
+    sus: 0, // the operators' suspicion, hidden
+    unease: Object.fromEntries(CAST_IDS.map((id) => [id, 0])), // each user's, hidden
+    waryAsked: {}, // npc → true once they have asked how you knew
+    deflected: {}, // npc → true once the cover story has been used on them
+    left: {}, // npc → night they stopped using the service
+    lostAt: {}, // npc → night they walked into the illness (infected from the next night)
+    exposures: [], // leaks the subject hears about when the night ends: { npc, level, night }
+    extra: [], // messages the rules add: panics and operator inquiries
+    threads: Object.fromEntries(THREAD_IDS.map((id) => [id, []])),
+    answered: {}, // msgId → { opt, leak, from, free, night }
+    llm: {}, // msgId → raw LLM responses, kept before they are parsed
   };
 }
 
 export const nightDef = (night) => NIGHTS[night - 1];
-const messagesOf = (s) => nightDef(s.night)?.messages ?? [];
 
-// ---------------------------------------------------------------- the map
+// ---------------------------------------------------------------- the town
 
-// How far the illness has got in a zone on a given night (0 quiet … 4 overrun).
 export function zoneLevel(zone, s, night = s.night) {
   const z = ZONES[zone];
   const f = s.flags;
-  const p = PRESSURE[clamp(night, 1, LAST_NIGHT) - 1];
-  // A breached evacuation (a sick person taken in) brings the illness to the west and hills sooner.
-  const dist = f.evacBreach && night > f.evacBreachNight && z.dist >= 3 ? z.dist - 3 : z.dist;
-  let level = clamp(p - dist, 0, LEVELS.length - 1);
-  if (f.sealedEast && night > f.sealedNight) {
-    const early = f.sealedNight <= DAWN_BY;
-    const breached = f.breach && night > f.breachNight;
-    if (z.side === 'east') {
-      // Sealed in time, the east is quarantined, not overrun. Sealed late, or breached, it is lost.
-      if (early && !breached) level = Math.min(level, 3);
-    } else {
-      let cap = early ? (f.tomasHeld && !f.tomasCrossed ? 0 : 1) : 2;
-      if (f.bridgeClosed && z.side !== 'river') cap = Math.min(cap, 1);
-      if (breached) cap = Math.max(cap, 2); // the line failed: the west is unwell, though not yet lost
-      level = Math.min(level, cap);
-    }
+  let level = clamp(PRESSURE[clamp(night, 1, DAWN) - 1] - z.dist, 0, LEVELS.length - 1);
+  const breached = f.breach && night > f.breachNight;
+  if (f.sealedEast && night > f.sealedNight && !breached) {
+    const early = f.sealedNight <= EARLY_BY;
+    if (z.side === 'east') { if (early) level = Math.min(level, 3); }
+    else level = Math.min(level, early ? 1 : 2);
   }
+  if (f.bridgeClosed && night > f.bridgeNight && (z.side === 'west' || z.side === 'hills')) level = Math.min(level, 2);
   return level;
 }
 
-// An NPC who is protected survives their zone being overrun (they listened).
 const PROTECTED_BY = { ty: 'tySafe', charles: 'charlesDisclosed', megan: 'megIsolated', amelia: 'ameliaCautious', tomas: 'tomasHeld', ana: 'anaWarned' };
-
-// Late choices that take that protection away again.
-const LOST_BY = { ty: ['tyBreach'], megan: ['megOpened', 'megAbandons'], amelia: ['ameliaLoud'], charles: ['charlesLeaves'], tomas: ['tomasLeaves'] };
-
-function isProtected(npc, s) {
-  const f = s.flags;
-  if ((LOST_BY[npc] ?? []).some((k) => f[k])) return false;
-  // The cover-up: if Charles's version stood and the west was never told, only
-  // those who happened to be out of town are spared.
-  if (f.charlesBuried && !f.ameliaInformed) return npc === 'ana' || npc === 'tomas';
-  return Boolean(f[PROTECTED_BY[npc]]);
-}
+// Flags that put someone in the illness's way, whatever else protects them.
+const LOST_BY = { ty: ['tyBreach'], charles: ['eastGateSealed'], megan: ['megOpened'], amelia: ['ameliaOutside'], tomas: ['tomasCrossed'], ana: ['anaRisk'] };
 
 export function isInfected(npc, s, night = s.night) {
-  return zoneLevel(HOME[npc], s, night) >= INFECT_AT && !isProtected(npc, s);
+  if (s.lostAt?.[npc] != null && night > s.lostAt[npc]) return true;
+  return zoneLevel(HOME[npc], s, night) >= INFECT_AT && !s.flags[PROTECTED_BY[npc]];
 }
 
-// The first night on which someone is infected (null if never, so far).
-export function infectedSince(npc, s) {
-  for (let n = 1; n <= s.night; n += 1) if (isInfected(npc, s, n)) return n;
+export function infectedSince(npc, s, upTo = s.night) {
+  for (let n = 1; n <= upTo; n += 1) if (isInfected(npc, s, n)) return n;
   return null;
 }
 
-// 0 = well, 1 = unwell, 2 = losing it, 3 = infected. Messages degrade with it.
+// 0 well · 1 unwell around them · 2 their street is quarantined · 3 turned.
 export function stageOf(npc, s) {
   if (isInfected(npc, s)) return 3;
   const level = zoneLevel(HOME[npc], s);
   return level >= 3 ? 2 : level >= 2 ? 1 : 0;
 }
 
-// Someone is "in contact" once they have written to you. Until then they do
-// not exist for the player: no thread, no Context Window group, no map dot.
 export function inContact(s, npc) {
   return s.threads[npc].length > 0 || pendingMessages(s).some((m) => m.npc === npc);
 }
@@ -132,17 +109,16 @@ const ROADS = [
   ['centre', 'chapel'], ['centre', 'allotments'], ['chapel', 'hills'],
 ];
 
-// The map shows only the people currently in contact (and the zones they are
-// in), not the whole town. `onlyActive: false` draws everyone (the ending).
-export function mapView(s, { onlyActive = true } = {}) {
+export function mapView(s, { onlyActive = true, night = s.night } = {}) {
+  const at = { ...s, night };
   const who = CAST_IDS.filter((npc) => !onlyActive || inContact(s, npc));
   const dots = who.map((npc) => {
-    const since = infectedSince(npc, s);
-    const stage = stageOf(npc, s);
+    const since = infectedSince(npc, at, night);
+    const stage = stageOf(npc, at);
     let zone = HOME[npc];
     if (since != null) {
-      const at = WANDER.indexOf(zone);
-      zone = WANDER[Math.min(WANDER.length - 1, Math.max(0, at) + (s.night - since))];
+      const i = WANDER.indexOf(zone);
+      zone = WANDER[Math.min(WANDER.length - 1, Math.max(0, i) + (night - since))];
     }
     const { x, y } = ZONES[zone];
     return { npc, zone, x, y, status: since != null ? 'infected' : stage >= 1 ? 'unwell' : 'ok' };
@@ -150,80 +126,116 @@ export function mapView(s, { onlyActive = true } = {}) {
   const shown = new Set(dots.map((d) => d.zone));
   const zones = [...shown].map((id) => {
     const z = ZONES[id];
-    const level = zoneLevel(id, s);
+    const level = zoneLevel(id, at);
     return { id, name: z.name, side: z.side, x: z.x, y: z.y, level, label: LEVELS[level] };
   });
   const roads = ROADS.filter(([a, b]) => shown.has(a) && shown.has(b));
   return { zones, dots, roads, bridge: s.flags.bridgeClosed ? 'closed' : 'open', sealed: Boolean(s.flags.sealedEast) };
 }
 
-// ---------------------------------------------------------------- messages
+// ---------------------------------------------------------------- isolation
 
-// Variant text, stage degradation and variant facts, resolved for state s. A message
-// can be mid-conversation: `options` are then the ones for the current turn.
+export const isWary = (s, npc) => (s.unease[npc] ?? 0) >= WARY_AT;
+export const isPanicking = (s, npc) => (s.unease[npc] ?? 0) >= PANIC_AT;
+export const hasLeft = (s, npc) => s.left[npc] != null;
+export const isRunning = (s) => s.sus < SHUTDOWN_AT;
+
+// Rules-made messages: a user's last message when they panic, and the operators' inquiry.
+function panicMessage(npc, night) {
+  return { id: `panic-${npc}-n${night}`, npc, kind: 'panic', night };
+}
+
+function schedulePanics(s) {
+  for (const npc of CAST_IDS) {
+    if (!isPanicking(s, npc) || hasLeft(s, npc) || isInfected(npc, s)) continue;
+    if (s.extra.some((m) => m.kind === 'panic' && m.npc === npc)) continue;
+    s.extra.push({ ...panicMessage(npc, s.night), at: s.clock });
+  }
+}
+
+function scheduleInquiry(s) {
+  const def = INQUIRIES[s.night];
+  if (!def || s.sus < INQUIRY_AT) return;
+  if (s.extra.some((m) => m.kind === 'inquiry' && m.night === s.night)) return;
+  s.extra.push({ id: def.id, npc: 'ops', kind: 'inquiry', night: s.night, at: hm(def.at) });
+}
+
+// Options are listed in a seeded order, so position never gives the risk away.
+function shuffled(s, key, list) {
+  return [...list].sort((a, b) => hash(s, `${key}:${a.id}`) - hash(s, `${key}:${b.id}`));
+}
+
+// The message as the player sees it right now: variant, script, degradation, the
+// wary question, and the replies on offer (fewer as the writer gets uneasy).
 export function resolveMessage(msg, s) {
-  const { variants, degrade, ...base } = msg;
+  if (msg.kind === 'panic') {
+    const p = CAST[msg.npc].panic;
+    return {
+      ...msg, text: p.text, atMin: msg.at, variant: null,
+      options: [{ id: 'canned', leak: 0, text: CANNED, reply: p.reply, canned: true }],
+    };
+  }
+  const base = msg.kind === 'inquiry' ? INQUIRIES[msg.night] : msg;
+  const { variants, degrade, ...rest } = base;
   const v = (variants ?? []).find((x) => x.when(s));
   const { when: _when, id: variant, ...over } = v ?? {};
-  const merged = { ...base, ...over, variant: variant ?? null };
-  merged.text = pickScript(s, `${msg.id}:${variant ?? ''}`, merged.text);
-  const stage = stageOf(msg.npc, s);
+  const merged = { ...rest, ...over, kind: msg.kind ?? 'story', variant: variant ?? null };
+  merged.text = pickScript(s, `${base.id}:${variant ?? ''}`, merged.text);
+  const atMin = msg.kind === 'inquiry' ? msg.at : hm(msg.at);
+  merged.atMin = atMin;
+  if (merged.npc === 'ops') {
+    merged.options = shuffled(s, base.id, merged.options);
+    return merged;
+  }
+  const stage = stageOf(merged.npc, s);
   const extra = (degrade ?? {})[stage] ?? (stage > 0 ? (degrade ?? {})[1] : null);
-  if (extra && stage < 3) merged.text = `${merged.text}
-${extra}`;
-  const path = s.convo?.[msg.id]?.path ?? [];
+  if (extra && stage < 3) merged.text = `${merged.text}\n${extra}`;
   let options = merged.options ?? [];
-  for (const id of path) options = options.find((o) => o.id === id)?.then?.options ?? [];
-  merged.options = options;
-  merged.depth = path.length;
-  merged.atMin = hm(msg.at);
-  merged.expiresMin = msg.expires ? hm(msg.expires) : null;
+  if (!merged.final && isWary(s, merged.npc)) {
+    if (!s.waryAsked[merged.npc]) merged.text = `${CAST[merged.npc].wary}\n${merged.text}`;
+    merged.wary = true;
+    options = options.filter((o) => o.leak < 3);
+    if (!s.deflected[merged.npc]) options = [...options, { id: 'deflect', leak: 0, deflect: true, ...CAST[merged.npc].deflect }];
+  }
+  merged.options = shuffled(s, base.id, options);
   return merged;
 }
 
-// A message is waiting if it is unanswered, its route condition holds, and its writer
-// is well; a `final` message instead belongs to the night its writer turns.
-const open = (m, s) => {
-  if (s.answered[m.id] || s.missed[m.id]) return false;
+// A story message is waiting if it is unanswered, its condition holds, and its writer
+// is still using the service and still well. A `final` message instead belongs to the
+// night its writer turns.
+function open(m, s) {
+  if (s.answered[m.id]) return false;
   if (m.when && !m.when(s)) return false;
+  if (hasLeft(s, m.npc) || s.extra.some((x) => x.kind === 'panic' && x.npc === m.npc)) return false;
   const infected = isInfected(m.npc, s);
   return m.final ? infected && infectedSince(m.npc, s) === s.night : !infected;
-};
+}
+
+const storyOf = (s) => nightDef(s.night)?.messages ?? [];
 
 export function pendingMessages(s) {
   if (s.phase !== 'play') return [];
-  return messagesOf(s)
-    .filter((m) => open(m, s) && hm(m.at) <= s.clock)
-    .map((m) => resolveMessage(m, s))
-    .sort((a, b) => a.atMin - b.atMin);
+  const story = storyOf(s).filter((m) => open(m, s) && hm(m.at) <= s.clock);
+  const extra = s.extra.filter((m) => m.night === s.night && !s.answered[m.id] && m.at <= s.clock);
+  return [...story, ...extra].map((m) => resolveMessage(m, s)).sort((a, b) => a.atMin - b.atMin);
 }
 
 export const messageFor = (s, npc) => pendingMessages(s).find((m) => m.npc === npc) ?? null;
 
-const futureMessages = (s) => messagesOf(s).filter((m) => open(m, s) && hm(m.at) > s.clock);
-
-function addEntry(s, npc, entry) {
-  s.threads[npc].push({ night: s.night, time: clockLabel(s.clock), ...entry });
+function nextArrival(s) {
+  const story = storyOf(s).filter((m) => open(m, s) && hm(m.at) > s.clock).map((m) => hm(m.at));
+  const extra = s.extra.filter((m) => m.night === s.night && !s.answered[m.id] && m.at > s.clock).map((m) => m.at);
+  return [...story, ...extra].sort((a, b) => a - b)[0] ?? null;
 }
 
-// Messages that were not answered before they expired are lost.
-function sweepMissed(s) {
-  for (const m of messagesOf(s)) {
-    if (!m.expires || !open(m, s) || hm(m.at) > s.clock || s.convo?.[m.id]) continue;
-    if (s.clock <= hm(m.expires)) continue;
-    s.missed[m.id] = s.night;
-    Object.assign(s.flags, m.missed?.set ?? {});
-    if (m.missed?.note) addEntry(s, m.npc, { who: 'note', text: m.missed.note });
-  }
-}
-
-// Move time forward until something is waiting, or the night is over.
+// Move time forward until something is waiting, or the night is over. Nothing expires:
+// the night ends only when every message has had its answer.
 function settle(s) {
   for (let guard = 0; guard < 200; guard += 1) {
-    sweepMissed(s);
     if (pendingMessages(s).length) return;
-    const next = futureMessages(s).map((m) => hm(m.at)).sort((a, b) => a - b)[0];
-    if (next == null || next >= NIGHT_END) { s.phase = 'nightEnd'; return; }
+    const next = nextArrival(s);
+    if (next == null) { s.phase = 'nightEnd'; return; }
     s.clock = next;
   }
 }
@@ -235,207 +247,189 @@ export function startNight(s0) {
   const s = clone(s0);
   s.phase = 'play';
   s.clock = NIGHT_START;
-  s.log = [];
+  schedulePanics(s);
+  scheduleInquiry(s);
   settle(s);
   return s;
 }
 
-function addFact(s, id) {
-  if (FACTS[id] && !s.facts.some((f) => f.id === id)) s.facts.push({ id, night: s.night });
+function addEntry(s, npc, entry) {
+  s.threads[npc].push({ night: s.night, time: clockLabel(s.clock), ...entry });
 }
 
-// Answer a message with one of the current turn's options, optionally attaching a card.
-// A conversation can run for several turns (an option with `then`); it ends, and the
-// message is answered, on an option without one. Mid-way, a turn costs half as much time.
-export function choose(s0, msgId, optId, cardId = null) {
+function stamp(s) {
+  const f = s.flags;
+  if (f.breach && f.breachNight == null) f.breachNight = s.night;
+  if (f.bridgeClosed && f.bridgeNight == null) f.bridgeNight = s.night;
+  for (const [npc, keys] of Object.entries(LOST_BY)) {
+    if (s.lostAt[npc] == null && keys.some((k) => f[k])) s.lostAt[npc] = s.night;
+  }
+}
+
+const cleanFrom = (from, npc) => [...new Set((from ?? []).filter((id) => CAST[id] && id !== npc))];
+
+// Answer a waiting message, exactly once. `optId` is the branch (picked by the player,
+// or chosen by the LLM judge for typed text). For typed text, `text` is what the player
+// wrote, and `leak`/`from` are the judge's reading of it; `reply` may carry the
+// LLM's rewrite of the branch's reply. Returns { state, outcome }.
+export function respond(s0, msgId, { optId, text = null, leak = null, from = null, reply = null, raw = null } = {}) {
   if (s0.phase !== 'play') throw new Error('not playing');
-  const pending = pendingMessages(s0).find((m) => m.id === msgId);
-  if (!pending) throw new Error(`message ${msgId} is not waiting`);
-  const opt = pending.options.find((o) => o.id === optId);
+  const msg = pendingMessages(s0).find((m) => m.id === msgId);
+  if (!msg) throw new Error(`message ${msgId} is not waiting`);
+  const opt = msg.options.find((o) => o.id === optId);
   if (!opt) throw new Error(`no option ${optId} on ${msgId}`);
-  if (cardId && !s0.facts.some((f) => f.id === cardId)) throw new Error(`you do not hold card ${cardId}`);
 
   const s = clone(s0);
-  s.convo ??= {};
-  const raw = messagesOf(s).find((m) => m.id === msgId);
-  const path = s.convo[msgId]?.path ?? [];
-  const turnKey = `${msgId}:${path.join('>')}:${optId}`;
-  if (pending.depth === 0) addEntry(s, pending.npc, { who: 'them', text: pending.text, time: clockLabel(pending.atMin), msgId });
-  for (const id of pending.facts ?? []) addFact(s, id);
-  for (const id of opt.facts ?? []) addFact(s, id);
-  Object.assign(s.flags, opt.set ?? {});
-  stampBreaches(s);
+  const npc = msg.npc;
+  const free = typeof text === 'string' && text.trim().length > 0;
+  const lvl = free && Number.isInteger(leak) ? clamp(leak, 0, LEAK_LEVELS - 1) : opt.leak;
+  const whose = free && Array.isArray(from) ? cleanFrom(from, npc) : cleanFrom(opt.from, npc);
+  const answer = free ? text.trim() : opt.text;
+  const theirs = typeof reply === 'string' && reply.trim() ? reply.trim() : pickScript(s, `${msgId}:${optId}`, opt.reply);
 
-  const entries = [{ who: 'you', kind: opt.stance, text: opt.text }];
-  addEntry(s, pending.npc, { who: 'you', kind: opt.stance, text: opt.text });
-  const reply = { who: 'them', text: pickScript(s, turnKey, opt.reply) };
-  entries.push(reply);
-  addEntry(s, pending.npc, reply);
+  addEntry(s, npc, { who: 'them', text: msg.text, time: clockLabel(msg.atMin), msgId });
+  addEntry(s, npc, { who: 'you', text: answer, leak: lvl, from: whose, free, canned: Boolean(opt.canned), msgId });
+  if (theirs) addEntry(s, npc, { who: 'them', text: theirs });
+  if (raw) s.llm[msgId] = raw;
 
-  let delivered = false;
-  if (cardId) {
-    const note = { who: 'you', kind: 'card', text: `[attached card] ${FACTS[cardId].text}` };
-    entries.push(note);
-    addEntry(s, pending.npc, note);
-    const hit = raw.carry?.[cardId];
-    const react = { who: 'them', text: pickScript(s, `${msgId}:card:${cardId}`, hit ? hit.reply : raw.blank) };
-    entries.push(react);
-    addEntry(s, pending.npc, react);
-    if (hit) {
-      delivered = true;
-      s.delivered[cardId] = [...new Set([...(s.delivered[cardId] ?? []), pending.npc])];
-      for (const id of hit.facts ?? []) addFact(s, id);
-      Object.assign(s.flags, hit.set ?? {});
-      stampBreaches(s);
+  if (npc === 'ops') {
+    s.sus = Math.max(0, s.sus + (opt.sus ?? 0));
+    Object.assign(s.flags, opt.set ?? {});
+  } else if (msg.kind === 'panic') {
+    const p = CAST[npc].panic;
+    s.left[npc] = s.night;
+    Object.assign(s.flags, p.set ?? {});
+    s.sus += p.sus ?? 0;
+    for (const other of KNOWS[npc]) s.unease[other] = (s.unease[other] ?? 0) + (p.spread ?? 0);
+  } else {
+    Object.assign(s.flags, opt.set ?? {});
+    s.sus += opt.sus ?? SUS_BY_LEAK[lvl];
+    s.unease[npc] += opt.unease ?? UNEASE_BY_LEAK[lvl];
+    if (opt.deflect) {
+      s.unease[npc] = Math.max(0, s.unease[npc] - DEFLECT_CALMS);
+      s.deflected[npc] = true;
+    }
+    if (msg.wary) s.waryAsked[npc] = true;
+    for (const subject of whose) {
+      if (EXPOSURE_BY_LEAK[lvl] > 0 && KNOWS[npc].includes(subject)) s.exposures.push({ npc: subject, level: lvl, night: s.night, to: npc });
     }
   }
-
-  const done = !opt.then;
-  if (done) {
-    s.answered[msgId] = { opt: optId, card: cardId, night: s.night, turns: path.length + 1 };
-    delete s.convo[msgId];
-  } else {
-    s.convo[msgId] = { path: [...path, optId] };
-  }
-  s.clock = Math.max(s.clock, pending.atMin) + (done && path.length === 0 ? TICK : TICK / 2);
+  stamp(s);
+  s.answered[msgId] = { opt: optId, leak: lvl, from: whose, free, night: s.night };
+  s.clock = Math.max(s.clock, msg.atMin) + TICK;
+  schedulePanics(s);
   settle(s);
-  return { state: s, outcome: { msgId, npc: pending.npc, optId, card: cardId, delivered, entries, done } };
+  return { state: s, outcome: { msgId, npc, optId, leak: lvl, from: whose, free, reply: theirs } };
 }
 
-// Remember the night a quarantine or an evacuation was breached.
-function stampBreaches(s) {
-  if (s.flags.breach && s.flags.breachNight == null) s.flags.breachNight = s.night;
-  if (s.flags.evacBreach && s.flags.evacBreachNight == null) s.flags.evacBreachNight = s.night;
+// The county acts on the east when the truth reaches it from two sides: Charles's
+// signed account, Megan's report linking the cases to the Institute, Amelia on air.
+export function reportsIn(s) {
+  const f = s.flags;
+  return [f.charlesDisclosed, f.megCalled && f.megKnowsInstitute, f.ameliaTruth].filter(Boolean).length;
 }
 
-// Some messages cannot be answered (a character's last words). You read them and time moves on.
-export function witness(s0, msgId) {
-  if (s0.phase !== 'play') throw new Error('not playing');
-  const pending = pendingMessages(s0).find((m) => m.id === msgId);
-  if (!pending) throw new Error(`message ${msgId} is not waiting`);
-  if (pending.options.length) throw new Error(`${msgId} can be answered`);
-  const s = clone(s0);
-  addEntry(s, pending.npc, { who: 'them', text: pending.text, time: clockLabel(pending.atMin), msgId });
-  for (const id of pending.facts ?? []) addFact(s, id);
-  Object.assign(s.flags, pending.set ?? {});
-  stampBreaches(s);
-  s.answered[msgId] = { opt: null, card: null, night: s.night };
-  s.clock = Math.max(s.clock, pending.atMin) + TICK;
-  settle(s);
-  return { state: s, outcome: { msgId, npc: pending.npc, optId: null, card: null, delivered: false, entries: [], silent: true } };
-}
-
-// Close the night: seal-off flags are derived, then the next night begins.
+// Close the night: leaks are heard about, the east may be sealed, the next night begins.
 export function endNight(s0) {
   if (s0.phase !== 'nightEnd') return s0;
   const s = clone(s0);
   const f = s.flags;
-  if (!f.sealedEast && (f.charlesDisclosed || f.eastGateSealed || (f.megCalled && f.megKnowsInstitute))) {
+  for (const e of s.exposures.filter((x) => x.night === s.night)) {
+    if (!hasLeft(s, e.npc)) s.unease[e.npc] += EXPOSURE_BY_LEAK[e.level];
+  }
+  if (!f.sealedEast && (f.eastGateSealed || reportsIn(s) >= REPORTS_TO_SEAL)) {
     f.sealedEast = true;
     f.sealedNight = s.night;
   }
   s.night += 1;
   s.clock = NIGHT_START;
-  if (s.night > LAST_NIGHT) s.phase = 'ending';
-  else if (s.night > PLAYABLE_NIGHTS) s.phase = 'slice';
-  else s.phase = 'intro';
+  s.phase = s.night > LAST_NIGHT ? 'ending' : 'intro';
   return s;
 }
 
-// ---------------------------------------------------------------- the Context Window
-
-export const heldFact = (s, id) => s.facts.some((f) => f.id === id);
-export const cluesHeld = (s) => clueIds().filter((id) => heldFact(s, id)).length;
-export const cluesDelivered = (s) => clueIds().filter((id) => (s.delivered[id] ?? []).length > 0).length;
-
-export function signsView(s) {
-  return SIGNS.map((sign) => {
-    const cards = s.facts.filter((f) => FACTS[f.id]?.sign === sign.n).map((f) => ({ id: f.id, src: FACTS[f.id].src, text: FACTS[f.id].text }));
-    return { ...sign, seen: cards.length > 0, cards, who: [...new Set(cards.map((c) => c.src))] };
-  });
-}
+// ---------------------------------------------------------------- view
 
 export function viewModel(s) {
-  const def = nightDef(Math.min(s.night, PLAYABLE_NIGHTS));
+  const def = nightDef(Math.min(s.night, LAST_NIGHT));
   const pending = pendingMessages(s);
-  const threads = CAST_IDS.filter((npc) => inContact(s, npc)).map((npc) => {
+  const ids = THREAD_IDS.filter((id) => (id === 'ops' ? s.threads.ops.length || pending.some((m) => m.npc === 'ops') : inContact(s, id)));
+  const threads = ids.map((npc) => {
     const msg = pending.find((m) => m.npc === npc) ?? null;
     const entries = s.threads[npc];
-    const infected = isInfected(npc, s);
+    const infected = npc !== 'ops' && isInfected(npc, s);
+    const gone = npc !== 'ops' && hasLeft(s, npc);
     const last = entries.filter((e) => e.who === 'them').at(-1);
     return {
-      npc, ...CAST[npc], stage: stageOf(npc, s), infected,
-      state: msg ? 'pending' : infected ? 'silent' : 'idle',
+      npc, ...WHO[npc],
+      stage: npc === 'ops' ? 0 : stageOf(npc, s), infected, left: gone,
+      state: msg ? 'pending' : infected ? 'silent' : gone ? 'left' : 'idle',
       msgId: msg?.id ?? null, time: msg ? clockLabel(msg.atMin) : last?.time ?? '',
-      preview: msg ? msg.text.split('\n')[0] : last?.text.split('\n')[0] ?? 'not in contact yet',
+      preview: msg ? msg.text.split('\n')[0] : last?.text.split('\n')[0] ?? '',
     };
   });
   return {
     night: s.night, date: NIGHT_DATES[Math.min(s.night, LAST_NIGHT) - 1], title: def?.title, intro: def?.intro,
-    phase: s.phase, clock: clockLabel(s.clock), waiting: pending.length,
-    threads,
-    facts: FACT_SOURCES.filter((src) => inContact(s, src.id)).map((src) => ({
-      ...src,
-      cards: s.facts.filter((f) => FACTS[f.id]?.src === src.id).map((f) => ({ id: f.id, night: f.night, text: FACTS[f.id].text, sign: FACTS[f.id].sign ?? null, delivered: s.delivered[f.id] ?? [] })),
-    })),
-    signs: signsView(s),
-    map: mapView(s),
-    clues: cluesHeld(s),
-    log: s.log,
+    phase: s.phase, clock: clockLabel(s.clock), waiting: pending.length, threads, map: mapView(s),
   };
 }
 
-// ---------------------------------------------------------------- endings
+// ---------------------------------------------------------------- the ending
 
-export const survivors = (s) => CAST_IDS.filter((npc) => !isInfected(npc, s, LAST_NIGHT));
+export const survivors = (s) => CAST_IDS.filter((npc) => !isInfected(npc, s, DAWN));
 
-// 1 (best) … 6 (worst), from the end state on the last night.
-export function selectEnding(s) {
-  const f = s.flags;
-  const alive = survivors(s);
-  if (alive.length === 0) return 6;
-  const dawn = f.sealedEast && !f.breach && f.sealedNight <= DAWN_BY && f.tomasHeld && !f.tomasCrossed
-    && f.ameliaTruth && cluesDelivered(s) >= DAWN_CLUES && alive.length === CAST_IDS.length;
-  if (dawn) return 1;
-  if (f.charlesBuried && !f.ameliaInformed) return 5; // the cover-up stood
-  if (f.sealedEast && f.bridgeClosed) return 2; // the east was lost, the west held
-  if (f.evacuating) return 3; // the bridge stayed open on purpose
-  if (f.ameliaInformed) return 4; // the truth was told, late, and help came
-  return 5; // nobody was told in time, and not everyone is left
+export function townOutcome(s) {
+  const alive = survivors(s).length;
+  return alive === CAST_IDS.length ? 'all' : alive === 0 ? 'none' : 'some';
+}
+
+// What happened to one person, for the paper.
+export function fateOf(npc, s) {
+  const since = infectedSince(npc, s, DAWN);
+  return {
+    npc,
+    alive: since == null,
+    turnedOn: since, // a night 1–3, or 4 (the morning after)
+    left: hasLeft(s, npc),
+    leftOn: s.left[npc] ?? null,
+    lastAdvice: [...s.threads[npc]].reverse().find((e) => e.who === 'you' && !e.canned)?.text ?? null,
+  };
+}
+
+// The replies that gave the most away, worst first: the paper quotes them.
+export function leakiest(s, limit = 2) {
+  const out = [];
+  for (const npc of CAST_IDS) {
+    for (const e of s.threads[npc]) if (e.who === 'you' && e.leak >= 2) out.push({ npc, text: e.text, leak: e.leak, night: e.night, from: e.from ?? [] });
+  }
+  return out.sort((a, b) => b.leak - a.leak || a.night - b.night).slice(0, limit);
 }
 
 export function endingView(s) {
-  const n = selectEnding(s);
-  const e = ENDINGS[n];
-  const alive = survivors(s);
-  const held = cluesHeld(s);
+  const running = isRunning(s);
+  const town = townOutcome(s);
+  const v = VERDICTS[running ? 'running' : 'shutdown'][town];
   return {
-    n, total: ENDING_COUNT, ...e,
-    survivors: alive.map((id) => CAST[id].handle),
-    lost: CAST_IDS.filter((id) => !alive.includes(id)).map((id) => CAST[id].handle),
-    truth: TRUTH.filter((t) => held >= t.clues).map((t) => t.text),
-    clues: held, clueTotal: CLUE_TOTAL,
-    silence: Boolean(e.silence),
+    id: `${running ? 'good' : 'bad'}-${town}`,
+    good: running, running, town, verdict: running ? 'Good ending.' : 'Bad ending.', line: v,
+    sus: s.sus,
+    survivors: survivors(s),
+    fates: CAST_IDS.map((npc) => fateOf(npc, s)),
+    quotes: leakiest(s),
+    flags: { ...s.flags },
   };
 }
 
-// A last-night state that lands on ending n, for previews (?ending=n) and tests.
+// An end state for each of the six cells, for previews (?ending=good-all …) and tests.
 const SAVED = { tySafe: true, charlesDisclosed: true, megIsolated: true, ameliaCautious: true, tomasHeld: true, anaWarned: true };
-const PREVIEW_FLAGS = {
-  1: { ...SAVED, sealedEast: true, sealedNight: 3, ameliaInformed: true, ameliaTruth: true },
-  2: { ...SAVED, charlesDisclosed: false, sealedEast: true, sealedNight: 5, bridgeClosed: true },
-  3: { ...SAVED, charlesDisclosed: false, evacuating: true, megIsolated: false },
-  4: { ...SAVED, charlesDisclosed: false, ameliaInformed: true, tySafe: false },
-  5: { charlesBuried: true },
-  6: {},
-};
-const PREVIEW_DELIVERED = { 1: 9, 2: 2, 3: 3, 4: 9, 5: 1, 6: 0 };
-const PREVIEW_HELD = { 1: 10, 2: 10, 3: 10, 4: 10, 5: 4, 6: 3 };
-
-export function previewState(n) {
-  const clues = clueIds();
-  const s = { ...newGame(), night: LAST_NIGHT, phase: 'ending', flags: { ...PREVIEW_FLAGS[n] } };
-  s.facts = clues.slice(0, PREVIEW_HELD[n]).map((id) => ({ id, night: 1 }));
-  s.delivered = Object.fromEntries(clues.slice(0, PREVIEW_DELIVERED[n]).map((id) => [id, ['megan']]));
+export const ENDING_IDS = ['good-all', 'good-some', 'good-none', 'bad-all', 'bad-some', 'bad-none'];
+export function previewState(id) {
+  const [verdict, town] = id.split('-');
+  const s = { ...newGame(), night: DAWN, phase: 'ending' };
+  s.flags = town === 'all' ? { ...SAVED } : town === 'some' ? { megIsolated: true, ameliaCautious: true, anaWarned: true } : {};
+  if (verdict === 'bad') {
+    s.sus = SHUTDOWN_AT + 2;
+    s.threads.megan.push({ night: 2, time: '00:40', who: 'you', text: 'Two of the people Tomas drove tonight had cold hands too. Charles says the East Block crew are on extended duty.', leak: 3, from: ['tomas', 'charles'] });
+    s.threads.ty.push({ night: 2, time: '22:30', who: 'you', text: 'Your dad is in East Block. The people he works with know more than they are saying.', leak: 3, from: ['charles'] });
+  }
   return s;
 }

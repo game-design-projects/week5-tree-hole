@@ -1,6 +1,6 @@
 // Local save in localStorage. Every access is guarded: private windows,
 // blocked storage or a corrupt save must never break the game.
-import { SAVE_KEY } from './config.js';
+import { SAVE_KEY, SAVE_VERSION } from './config.js';
 
 export function createStore(log, storage = globalThis.localStorage) {
   return {
@@ -9,7 +9,7 @@ export function createStore(log, storage = globalThis.localStorage) {
         const raw = storage?.getItem(SAVE_KEY);
         if (!raw) return null;
         const s = JSON.parse(raw);
-        if (s?.v !== 2 || typeof s.night !== 'number') throw new Error('incompatible save');
+        if (s?.v !== SAVE_VERSION || typeof s.night !== 'number') throw new Error('incompatible save');
         log.info('save', 'loaded', { night: s.night, phase: s.phase });
         return s;
       } catch (err) {

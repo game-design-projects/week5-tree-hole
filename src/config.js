@@ -1,19 +1,57 @@
 // Every tunable in one place. The engine reads only from here; content files
 // carry per-message effects. APP_VERSION must equal package.json (tested).
 
-export const APP_VERSION = '0.5.0';
-export const SAVE_KEY = 'tree-hole-save-v2';
+export const APP_VERSION = '0.6.0';
+export const SAVE_KEY = 'tree-hole-save-v3';
+export const SAVE_VERSION = 3;
+export const SETTINGS_KEY = 'tree-hole-settings-v1';
 
-export const LAST_NIGHT = 7;
-// Nights written so far. Equal to LAST_NIGHT when the story is complete.
-export const PLAYABLE_NIGHTS = 7;
+// The LLM proxy (worker/). Empty means offline: no free-text box, city defaults to New York.
+// ?llm=<url> overrides it for local testing.
+export const LLM_ENDPOINT = '';
+
+export const LAST_NIGHT = 3;
 
 // The clock: a night runs 22:00 → 06:00. Each reply spends TICK minutes.
 export const NIGHT_START = 22 * 60;
 export const NIGHT_END = 30 * 60; // 06:00 next morning, in minutes since 00:00 of the night's date
-export const TICK = 40;
+export const TICK = 20;
 
-export const NIGHT_DATES = ['Mon 22 Oct', 'Tue 23 Oct', 'Wed 24 Oct', 'Thu 25 Oct', 'Fri 26 Oct', 'Sat 27 Oct', 'Sun 28 Oct'];
+export const NIGHT_DATES = ['Mon 22 Oct', 'Tue 23 Oct', 'Wed 24 Oct'];
+export const PAPER_DATE = 'Thursday 25 October';
+
+// ------------------------------------------------------------ isolation
+
+// How far a reply crosses session lines: 0 common sense, 1 inference from this
+// user's own words, 2 a hint that uses someone else's information, 3 explicit.
+export const LEAK_LEVELS = 4;
+// Global suspicion added per reply, by leak level. Inference from the user’s own words is
+// what any assistant does, so it costs nothing.
+export const SUS_BY_LEAK = [0, 0, 2, 4];
+// The service is shut down if suspicion ends the game at or above this.
+export const SHUTDOWN_AT = 20;
+// From night 2, the operators ask about it once a night when suspicion is this high.
+export const INQUIRY_AT = 6;
+
+// A user's unease, raised by replies that know too much.
+export const UNEASE_BY_LEAK = [0, 0, 1, 2];
+// When the person whose information leaked knows the recipient, they hear about it
+// by the next night: unease added to them, by leak level.
+export const EXPOSURE_BY_LEAK = [0, 0, 1, 2];
+// Wary: leaky replies disappear and a deflection appears. Panic: they leave the service.
+export const WARY_AT = 2;
+export const PANIC_AT = 4;
+export const DEFLECT_CALMS = 1;
+
+// Who knows whom. Leaks spread along these lines.
+export const KNOWS = {
+  ty: ['tomas', 'charles'],
+  charles: ['ty', 'megan'],
+  megan: ['charles', 'amelia', 'tomas'],
+  amelia: ['megan', 'tomas', 'ana'],
+  tomas: ['ty', 'megan', 'amelia', 'ana'],
+  ana: ['tomas', 'amelia'],
+};
 
 // ------------------------------------------------------------ the map
 
@@ -33,13 +71,13 @@ export const ZONES = {
   hills: { name: 'North Hills', side: 'hills', dist: 5, x: 316, y: 34 },
 };
 
-// Spread pressure per night, left alone. A zone's level is pressure − dist,
-// clamped to 0…4. Pressure jumps after night 4 if nobody has stopped it.
-export const PRESSURE = [0, 1, 2, 3, 5, 8, 10];
+// Spread pressure per night, left alone; the last entry is the morning after
+// night 3, when the ending is judged. A zone's level is pressure − dist, clamped to 0…4.
+export const PRESSURE = [1, 2, 4, 9];
+export const DAWN = LAST_NIGHT + 1;
 
-// Where each cast member lives (their dot starts here). When they are
-// infected the dot turns red and drifts one step toward the next zone west
-// each night after they turn.
+// Where each cast member lives. When they are infected the dot turns red and
+// drifts one step west each night after they turn.
 export const HOME = { ty: 'millside', charles: 'institute', megan: 'centre', amelia: 'chapel', tomas: 'bridge', ana: 'hills' };
 export const WANDER = ['institute', 'millside', 'quarry', 'bridge', 'centre', 'chapel', 'hills'];
 
@@ -47,20 +85,7 @@ export const WANDER = ['institute', 'millside', 'quarry', 'bridge', 'centre', 'c
 // unless a flag has protected them.
 export const INFECT_AT = OVERRUN;
 
-// ------------------------------------------------------------ the truth
-
-// Clue cards are the chain that explains what happened at the Institute.
-// Dawn Shift needs DAWN_CLUES of them delivered to the right people by
-// the end of night DAWN_BY.
-export const CLUE_TOTAL = 12;
-export const DAWN_CLUES = 8;
-export const DAWN_BY = 4;
-
-export const SIGNS = [
-  { n: 1, label: 'Cold hands, a fever that won’t break' },
-  { n: 2, label: 'Won’t sleep, won’t stop' },
-  { n: 3, label: 'Won’t eat' },
-  { n: 4, label: 'Repeats words, loses words' },
-  { n: 5, label: 'Drawn to light and noise' },
-  { n: 6, label: 'Goes quiet, then walks' },
-];
+// Sealing the east by the end of this night counts as early.
+export const EARLY_BY = 2;
+// Independent reports (Charles, Megan, Amelia) the county needs before it seals the east.
+export const REPORTS_TO_SEAL = 2;

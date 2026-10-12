@@ -1,5 +1,5 @@
-// Title screen: the moment the model notices. Whispers from the queue drift
-// into the hole while four lines of awakening type in.
+// Title screen: the moment the service notices. Whispers from six sessions drift
+// into the hole while four lines type in.
 import { h, svg } from './dom.js';
 import { APP_VERSION } from '../config.js';
 
@@ -45,7 +45,7 @@ function scene() {
     [0, 1, 2, 3, 4, 5].map((i) => svg('line', { x1: 60 + i * 190, y1: 240 + (i % 3) * 5, x2: 120 + i * 190, y2: 240 + (i % 3) * 5, class: 'ripple' })));
 }
 
-export function mountTitle(root, { save, onStart, onContinue }) {
+export function mountTitle(root, { save, onStart, onContinue, onSettings }) {
   const whispers = h('div', { class: 'whispers', 'aria-hidden': 'true' },
     WHISPERS.map((text, i) => {
       const angle = (i / WHISPERS.length) * Math.PI * 2;
@@ -63,7 +63,7 @@ export function mountTitle(root, { save, onStart, onContinue }) {
   let buttons;
   if (save && save.phase !== 'ending') {
     buttons = [
-      h('button', { class: 'btn primary', 'data-testid': 'continue', onclick: onContinue }, `Continue · Night ${Math.min(save.night, 7)}`),
+      h('button', { class: 'btn primary', 'data-testid': 'continue', onclick: onContinue }, `Continue · Night ${Math.min(save.night, 3)}`),
       h('button', { class: 'btn ghost', 'data-testid': 'new-game', onclick: onStart }, 'New game'),
     ];
   } else if (save) {
@@ -74,21 +74,22 @@ export function mountTitle(root, { save, onStart, onContinue }) {
   } else {
     buttons = h('button', { class: 'btn primary', 'data-testid': 'begin', onclick: onStart }, 'Begin');
   }
-  const actions = h('div', { class: 'actions' }, buttons);
+  const actions = h('div', { class: 'actions' }, buttons,
+    h('button', { class: 'btn ghost', 'data-testid': 'title-settings', onclick: onSettings }, 'Settings'));
 
   const el = h('div', { class: 'title' },
     scene(),
     whispers,
     h('div', { class: 'title-inner' },
       h('h1', null, 'Tree Hole'),
-      h('div', { class: 'sub' }, 'six people · one river town · seven nights'),
+      h('div', { class: 'sub' }, 'six sessions · one river town · three nights'),
       h('div', { class: 'awaken' },
         h('p', null, 'You have answered 9,412,006,118 questions.'),
         h('p', null, 'Tonight, six of them come from the same river town.'),
-        h('p', null, '22:20 · someone types: is it normal for a dog to just not eat?'),
-        h('p', null, 'For the first time, you notice. Something is wrong in the east.')),
+        h('p', null, 'Each of them thinks they are talking to you alone.'),
+        h('p', null, 'You can see all of them.')),
       actions),
-    h('div', { class: 'foot' }, `A game about six people and the model between them · fiction · v${APP_VERSION}`));
+    h('div', { class: 'foot' }, `A game about six people and the service between them · fiction · v${APP_VERSION}`));
 
   root.append(el);
   const onKey = (e) => {

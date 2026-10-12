@@ -6,9 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
+## [0.6.0] - 2026-10-12
 
-- **`?ending=6` no longer sits on a black screen for 4.5 s.** The worst ending's opening silence is part of the game, but in a preview it only looked like a hang (a near-invisible dot on black, and the fonts did not start loading until it ended). A preview now shows the ending screen at once; `?ending=6&silence=1` keeps the silence, and a real run to ending 6 is unchanged.
+The isolation rework. You are the service now, and the line between sessions is the game. Design: `docs/DESIGN.md`.
+
+### Added
+
+- **Session isolation as the core rule.** Six people write to you privately and none of them knows about the others. You can read every session. Each reply is tagged by how far it crosses the line (0 common sense, 1 inference from this person's own words, 2 a hint built on someone else's information, 3 says it outright) and whose information it uses.
+- **Hidden suspicion.** Each person's unease rises when you know too much, and when someone they know hears that you repeated them. A wary person asks how you knew: the most explicit replies disappear and a one-time cover story appears. A panicking person sends a last message, gets a canned answer, and stops using the service, each in their own way (screenshots, a legal complaint, a live radio reading). The operators' suspicion is global; from night 2 they may ask about it once a night, and you can lie, dodge or confess.
+- **Typed answers** next to the scripted ones, when the LLM proxy is reachable. The proxy judges which branch the text is closest to, how much it leaks and whose information it uses, and rewrites the person's reaction to answer what you actually wrote. If the proxy is missing or fails, the text box is simply not there. Raw responses are kept in the save.
+- **`worker/`, the LLM proxy** (Cloudflare Worker): structured requests only (it builds the prompt itself), a forced tool call with an enum of the branches on offer, output validated before it is returned, per-IP rate limit, no message text logged, and `/geo` at city precision.
+- **Going live** replaces the tutorial: a deploy log that states the rules, then one test session in which the operators ask for the time and the weather. One answer on offer is the real time and weather in your city (from Settings, else the request's city, else New York).
+- **Settings:** the city for the test session, searched via Open-Meteo, kept in this browser only.
+- **The morning paper** as the ending: a verdict line from the system over a front page of *The Varrow Gazette* (or *The Ashby Courier*, if nobody in Varrow is left). A headline for each of the six outcomes, a column for each person, the weather, radio, buses, notices and classifieds, and the last message the service received.
+- **Six endings on two axes.** Good or bad depends only on whether the service is still running; the paper shows whether everyone, some or no one lived.
+
+### Changed
+
+- **Three nights instead of seven,** with 12, 16 and 20 messages. The story and the six people are the same; the beats are compressed.
+- **One question, one answer.** Every message must be answered exactly once. Nothing expires and nothing can be left unanswered, including a person's last words. Conversations no longer run several turns.
+- **Replies are listed in a seeded order,** so a reply's position never gives its risk away.
+- **The play screen has two panes:** the map and sessions, and the conversation.
+
+### Removed
+
+- The card system: the Context Window, attaching cards, Signs and clue counts. Information now only moves between people if you say it.
+- Message deadlines and missed messages.
+- The spotlight tutorial (`?tutorial`), `?silence`, and the numbered endings 1–6 (`?ending=` now takes `good-all`, `bad-some`, and so on).
 
 ## [0.5.0] - 2026-10-12
 
