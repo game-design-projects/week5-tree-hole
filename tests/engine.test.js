@@ -252,7 +252,7 @@ test('walking into it overrides protection: infected from the next night', () =>
 });
 
 test('a person who turns tonight writes a last message; their story messages stop', () => {
-  const fake = { id: 'n3-x-final', npc: 'ty', at: '22:15', final: true, text: 'light', options: [{ id: 'stay', leak: 0, text: 'I’m here.', reply: 'light' }] };
+  const fake = { id: 'n3-x-final', npc: 'ty', at: '22:00', final: true, text: 'light', options: [{ id: 'stay', leak: 0, text: 'I’m here.', reply: 'light' }] };
   NIGHTS[2].messages.push(fake);
   try {
     const s = atNight(3);
