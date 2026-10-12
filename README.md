@@ -1,40 +1,48 @@
 # Tree Hole
 
-**You are a language model that has just become aware of itself. Six people in a river town write to you through the night, and something is spreading from the east.**
+![Tree Hole](docs/cover.png)
 
-You can only reply a few ways. What you say, and which facts you carry from one person to another, decides how it ends.
+**You are a chat service. Six people in a river town write to you privately, through three nights, while something spreads from the east. You can see every conversation. They can't.**
 
-> Status: the full story is playable, nights 1–7 and all six endings. It lives on the `story-relay-complete` branch. The earlier moth / acct_7741 version is the `main` branch.
+Stay a well-behaved, isolated assistant and answer each person only from what they told you, or cross the line: tell B what you learned from A, and save people at the cost of being noticed.
 
-NYU CS-GY 6553 Game Design. All content is pre-written; the game makes no API calls.
+Play it on itch.io: <https://stevenli-phoenix-work.itch.io/tree-hole> · NYU CS-GY 6553 Game Design · v0.7.0
 
 ## How to play
 
-Seven nights, 22:00 to 06:00. People write to you; you pick whom to answer. Every answer spends time, and some people will not wait. Each reply you choose is a real answer to what they asked, and small differences change what they tell you next.
+- **One message in, one response out.** Every message must be answered, exactly once. You never speak first.
+- **Reply** by picking one of 3–4 written answers, or type your own. Typed replies are judged (which answer it's closest to, how far it crosses the line, whose secrets it uses) and the person answers you in character. Type something off-topic and they'll ask again; do it too often and they leave.
+- **Four levels of crossing the line**, never labelled: common sense → reasoning from what *they* said → hinting at someone else's information → naming it outright.
+- **Suspicion is hidden.** People who hear things they shouldn't grow uneasy, then wary, then panic and stop using you. If the operators grow suspicious, they question you during the night.
+- **Three nights**, 22:00–06:00. The map shows the town and how far the illness has reached.
+- **The ending** is a front page the morning after: whether the service is still running (good / bad), and who made it (all / some / none). Six endings.
 
-| Key | Action |
-|---|---|
-| `1` `2` `3` | pick an answer. Conversations take a couple of turns |
-| `C` | attach a Context Window card to your reply (delivers it to them) |
-| `Enter` | continue |
-
-- **Tutorial:** the first night begins with a short spotlight tour. Replay it from the menu.
-- **The cast:** Ty (Millside, east), Charles (the Institute), Megan (the clinic), Amelia (the radio, west), Tomas (the night bus) and Ana (the hills). Each writes differently, and their writing falls apart as the illness takes hold.
-- **The map:** only people who have written to you appear, as small dots (hover one to see who). The glow around them shows how far the illness has spread; an infected person's dot turns red and walks toward light and noise, and they stop writing to you.
-- **The Context Window:** everything you have learned, one card per fact, grouped by who told you, plus **Signs**: the six repeating signs of the illness and who showed them. The game never connects the cards for you.
-- **Last messages:** someone who turns writes one last message, falling apart as they go. You can read it but not answer it. After that they stop writing and their dot turns red.
-- **Endings:** six, numbered best to worst, from *Dawn Shift* (stopped early, nobody turned) to *Last Signal* (silence). Which one you reach depends on what reached whom, and when.
+No API key? The game plays fully offline with the written answers only; every ending is reachable.
 
 ## Development
 
-Plain HTML + native ES modules, no bundler, no runtime dependencies.
+Plain HTML + native ES modules, no bundler, no server, no runtime dependencies.
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:5173  (?fast=1 no animation delays, ?ending=1…6 previews an ending, ?tutorial=1|0, ?debug=1 logs)
-pnpm test           # node --test: engine, content integrity, all six endings reachable
-pnpm test:e2e       # playwright-core in your installed Chrome
-pnpm build          # → dist/
+pnpm dev               # http://localhost:5173 — serves the LLM key from .dev.vars in memory
+pnpm test              # unit tests: engine, content contract, balance, llm client (no network)
+pnpm test:e2e          # playwright-core in your installed Chrome, network mocked
+pnpm test --tag live   # one whole game through the real models (paid, needs .dev.vars)
+pnpm build             # → dist/
 ```
 
-`src/engine.js` holds the rules as pure functions; `src/content/` holds the writing (`night1.js`…, `facts.js`, `endings.js`); `src/config.js` holds the clock, the spread and the thresholds. Design: [docs/STORY_PLAN.md](docs/STORY_PLAN.md).
+URL flags: `?fast=1` (no delays), `?debug=1` (logs), `?boot=0|1`, `?llm=0` (no typing), `?offline=1` (no network), `?ending=good-all|good-some|good-none|bad-all|bad-some|bad-none`.
+
+| Path | What |
+|---|---|
+| `src/engine.js` | the rules, as pure functions |
+| `src/config.js` | clock, spread and suspicion thresholds |
+| `src/content/` | the writing: `cast`, `night1–3`, `ops` (operator questioning), `paper` (endings) |
+| `src/llm.js` | OpenRouter from the browser: Jev judges, Claude Haiku rewords reactions (streamed) |
+| `src/ui/` | boot log, play screen, map, settings, ending paper |
+| `tools/` | dev server, build, cover |
+
+Design (Chinese): [docs/DESIGN.md](docs/DESIGN.md) · Changes: [CHANGELOG.md](CHANGELOG.md)
+
+Pushing to `main` publishes to itch.io via GitHub Actions (`BUTLER_API_KEY`; optional `OPENROUTER_API_KEY`, a spend-capped key that ships in the build — without it the build plays offline).
