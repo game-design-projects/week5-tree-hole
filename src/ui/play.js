@@ -7,8 +7,7 @@ import { CAST, FACTS } from '../content/index.js';
 import { fill, h, lines } from './dom.js';
 import { renderMap } from './map.js';
 import { decrypt, decryptMs } from './decrypt.js';
-
-const STANCE = { reassure: 'Reassure', ask: 'Ask', warn: 'Warn', hold: 'Hold back' };
+import { startTutorial, tutorialSeen } from './tutorial.js';
 
 // A message keeps one key from the moment it is waiting to the moment it is in
 // the thread, so it decrypts once.
@@ -27,6 +26,7 @@ export function mountPlay(root, ctx) {
     tab: 'chat',
     seen: new Set(ctx.getState().facts.map((f) => f.id)),
     timers: [],
+    tut: null, // cleanup function while the tutorial is showing
     // Chat animation: entries already on screen when the game loads, or opened
     // from history, stay plain; new ones decrypt once.
     shown: new Set(),
@@ -110,6 +110,9 @@ export function mountPlay(root, ctx) {
       const next = o.entries[ui.revealed];
       const wait = next.who === 'you' ? 350 : 650 + Math.min(1500, next.text.length * 14);
       ui.timers.push(setTimeout(() => { ui.revealed += 1; reveal(); }, wait));
+    } else if (!o.done) {
+      // The conversation goes on: straight back to the next set of answers.
+      ui.timers.push(setTimeout(() => { if (ui.outcome === o) { ui.outcome = null; render(); } }, ctx.fast ? 0 : 400));
     }
   }
 
@@ -128,6 +131,15 @@ export function mountPlay(root, ctx) {
     ui.outcome = null;
     selectDefault(true);
     render();
+    if (state().night === 1 && ctx.tutorial && (ctx.tutorial === 'always' || !tutorialSeen())) showTutorial();
+  }
+
+  function showTutorial() {
+    ui.tut?.();
+    ui.menu = false;
+    ui.tab = 'chat';
+    render();
+    ui.tut = startTutorial(el, { onDone: () => { ui.tut = null; } });
   }
 
   function endNight() {
@@ -170,6 +182,7 @@ export function mountPlay(root, ctx) {
               ctx.onNewGame();
             },
           }, ui.confirmNew ? 'Click again to erase this run' : 'New game (erase save)'),
+          h('button', { 'data-testid': 'menu-tutorial', onclick: () => { if (state().phase === 'play') showTutorial(); else { ui.menu = false; render(); } } }, 'Replay tutorial'),
           h('button', { onclick: () => ctx.onTitle() }, 'Title screen'),
           h('div', { class: 'ver' }, `Tree Hole v${APP_VERSION} · saves after every reply`))));
   }
@@ -277,7 +290,8 @@ export function mountPlay(root, ctx) {
       const msg = s.phase === 'play' && npc ? E.messageFor(s, npc) : null;
       logEl.append(...entries.map((e) => (e.who === 'divider' ? dividerEl(e) : bubble(e, npc, { key: entryKey(npc, e, e.i) }))));
       if (msg) {
-        logEl.append(bubble({ who: 'them', text: msg.text, time: E.clockLabel(msg.atMin) }, npc, { pending: true, key: `m:${msg.id}` }));
+        // A conversation already under way has its lines in the thread; only a new message is "pending".
+        if (msg.depth === 0) logEl.append(bubble({ who: 'them', text: msg.text, time: E.clockLabel(msg.atMin) }, npc, { pending: true, key: `m:${msg.id}` }));
         composer = composerFor(msg, s);
       } else if (npc && vm.threads.find((t) => t.npc === npc)?.state === 'silent') {
         logEl.append(h('div', { class: 'bubble note' }, `${CAST[npc].handle} has stopped writing. They left their window. It is assumed they are somewhere on the map, moving.`));
@@ -304,23 +318,27 @@ export function mountPlay(root, ctx) {
           h('button', { class: 'btn primary', 'data-testid': 'witness', onclick: witnessMsg }, 'Read to the end', h('kbd', null, '⏎'))));
     }
     const held = s.facts.map((f) => f.id);
+    // A card is "valid" if the person would react to it and has not been given it already.
+    const valid = new Set(held.filter((id) => msg.carry?.[id] && !(s.delivered[id] ?? []).includes(msg.npc)));
     const expiring = msg.expiresMin != null && msg.expiresMin - s.clock <= 90 ? `answer by ${E.clockLabel(msg.expiresMin)}` : null;
     const tray = ui.tray && h('div', { class: 'tray', 'data-testid': 'tray' },
       held.length
         ? held.map((id) => h('button', {
-          class: `card-chip tone-${FACTS[id].src}${ui.card === id ? ' on' : ''}${FACTS[id].sign ? ' sign' : ''}`,
+          class: `card-chip tone-${FACTS[id].src}${ui.card === id ? ' on' : ''}${FACTS[id].sign ? ' sign' : ''}${valid.has(id) ? ' gold' : ''}`,
           'data-testid': `card-${id}`, title: FACTS[id].text,
           onclick: () => { ui.card = ui.card === id ? null : id; render(); },
         }, FACTS[id].text))
         : h('p', { class: 'ctx-empty' }, 'You hold no cards yet.'));
     return h('footer', { class: 'composer', 'data-testid': 'composer' },
-      h('div', { class: 'hint' }, 'your reply', expiring && h('span', { class: 'due', 'data-testid': 'due' }, expiring)),
+      h('div', { class: 'hint' }, msg.depth > 0 ? 'and you say' : 'you answer', expiring && h('span', { class: 'due', 'data-testid': 'due' }, expiring)),
       msg.options.map((o, i) => h('button', { class: `opt stance-${o.stance}`, 'data-testid': `choice-${o.id}`, onclick: () => pick(o.id) },
         h('kbd', null, String(i + 1)),
-        h('span', null, h('span', { class: 'lbl' }, o.label ?? STANCE[o.stance]), h('span', { class: 'txt' }, o.text)))),
+        h('span', { class: 'txt' }, o.text))),
       h('div', { class: 'attach-row' },
-        h('button', { class: `btn ghost small${ui.card ? ' on' : ''}`, 'data-testid': 'attach', onclick: () => { ui.tray = !ui.tray; render(); } },
-          ui.card ? 'Card attached · change' : 'Attach a card', h('kbd', null, 'C')),
+        h('button', {
+          class: `btn ghost small${ui.card ? ' on' : ''}${valid.size && !ui.card ? ' gold' : ''}`, 'data-testid': 'attach', 'data-valid': String(valid.size),
+          onclick: () => { ui.tray = !ui.tray; render(); },
+        }, ui.card ? 'Card attached · change' : 'Attach a card', h('kbd', null, 'C')),
         ui.card && h('span', { class: 'attached', 'data-testid': 'attached' }, FACTS[ui.card].text)),
       tray);
   }
@@ -369,9 +387,6 @@ export function mountPlay(root, ctx) {
         h('h2', null, vm.title),
         h('div', { class: 'date' }, vm.date),
         h('p', { class: 'lede' }, vm.intro),
-        vm.night === 1 && h('section', null, h('h3', null, 'How this works'),
-          h('p', { class: 'small-print', style: 'font-size:12.5px;color:var(--mute)' },
-            'People write to you through the night. Pick a reply with 1–3: Reassure, Ask, Warn or Hold back. Press C to attach one of your Context Window cards and deliver it to them. The clock moves with every reply, and not everyone will wait. The map shows what is happening in town.')),
         h('div', { class: 'go' }, h('button', { class: 'btn primary', 'data-testid': 'start-night', onclick: startNight }, 'Begin the night ⏎'))));
   }
 
@@ -418,6 +433,7 @@ export function mountPlay(root, ctx) {
   return () => {
     ui.timers.forEach(clearTimeout);
     ui.cancels.forEach((c) => c());
+    ui.tut?.();
     document.removeEventListener('keydown', onKey);
     el.remove();
   };

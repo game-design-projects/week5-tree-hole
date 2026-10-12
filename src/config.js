@@ -1,7 +1,7 @@
 // Every tunable in one place. The engine reads only from here; content files
 // carry per-message effects. APP_VERSION must equal package.json (tested).
 
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.5.0';
 export const SAVE_KEY = 'tree-hole-save-v2';
 
 export const LAST_NIGHT = 7;

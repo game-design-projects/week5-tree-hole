@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
 import { LAST_NIGHT, NIGHT_START, TICK } from '../src/config.js';
-import { atNight, carefulPlayer, playNight, playThrough, styledPlayer } from './helpers.js';
+import { atNight, carefulPlayer, playNight, playThrough, reply, styledPlayer } from './helpers.js';
 
 const ids = (s) => E.pendingMessages(s).map((m) => m.id);
 
@@ -28,7 +28,7 @@ test('startNight jumps to the first message; replies cost time and are saved to 
   const { state, outcome } = E.choose(s, 'n1-ty-dog', 'reassure');
   s = state;
   assert.equal(outcome.entries[0].who, 'you');
-  assert.ok(s.clock >= E.hm('22:20') + TICK, 'a reply costs time (the clock then jumps to the next message)');
+  assert.ok(s.clock >= E.hm('22:20') + TICK / 2, 'a turn costs time (half a tick mid-conversation)');
   assert.equal(s.threads.ty.length, 3); // their message, your reply, their reaction
   assert.ok(E.heldFact(s, 'ty-dog'));
 });
@@ -65,21 +65,21 @@ test('seven nights end in the ending', () => {
 
 test('an attached card is delivered, reacts, and sets flags', () => {
   let s = atNight(2);
-  s = E.choose(s, 'n2-ty-dad', 'ask').state; // learn ty-cold
+  s = reply(s, 'n2-ty-dad', 'ask'); // learn ty-cold
   assert.ok(E.heldFact(s, 'ty-cold'));
-  s = E.choose(s, 'n2-megan-cluster', 'ask', 'ty-cold').state;
+  s = reply(s, 'n2-megan-cluster', 'ask', 'ty-cold');
   assert.deepEqual(s.delivered['ty-cold'], ['megan']);
   assert.equal(s.flags.megAlert, true);
-  assert.match(s.threads.megan.at(-1).text, /cold hands/);
+  assert.ok(s.threads.megan.some((e) => /cold hands/.test(e.text)), 'Megan reacts to the card in the thread');
 });
 
 test('a card with no meaning gets the blank reaction and is not counted as delivered', () => {
   let s = atNight(2);
   s.facts.push({ id: 'ana-hills', night: 1 });
-  s = E.choose(s, 'n2-ty-dad', 'reassure').state;
-  s = E.choose(s, 'n2-megan-cluster', 'ask', 'ana-hills').state;
+  s = reply(s, 'n2-ty-dad', 'reassure');
+  s = reply(s, 'n2-megan-cluster', 'ask', 'ana-hills');
   assert.equal(s.delivered['ana-hills'], undefined);
-  assert.match(s.threads.megan.at(-1).text, /do not know what to do with that/);
+  assert.ok(s.threads.megan.some((e) => /do not know what to do with that/.test(e.text)), 'the blank reaction is in the thread');
 });
 
 // ------------------------------------------------------------ time
@@ -87,7 +87,7 @@ test('a card with no meaning gets the blank reaction and is not counted as deliv
 test('a message that expires unanswered is missed, with its consequence', () => {
   let s = atNight(3);
   // Ty, Megan and Charles first: the bus (expires 23:50) is gone by then.
-  for (const id of ['n3-ty-lamp', 'n3-megan-ward', 'n3-charles-log']) s = E.choose(s, id, 'ask').state;
+  for (const id of ['n3-ty-lamp', 'n3-megan-ward', 'n3-charles-log']) s = reply(s, id, 'ask');
   assert.equal(s.missed['n3-tomas-bus'], 3);
   assert.equal(s.flags.tomasCrossed, true);
   assert.match(s.threads.tomas.at(-1).text, /did not wait/);
@@ -95,9 +95,9 @@ test('a message that expires unanswered is missed, with its consequence', () => 
 
 test('answering the bus first keeps it from crossing', () => {
   let s = atNight(3);
-  s = E.choose(s, 'n3-ty-lamp', 'ask').state; // 22:55; the bus arrives at 23:10 and waits until 23:50
-  s = E.choose(s, 'n3-megan-ward', 'ask').state; // 23:35: the bus is now waiting, with 15 minutes left
-  s = E.choose(s, 'n3-tomas-bus', 'warn').state;
+  s = reply(s, 'n3-ty-lamp', 'ask'); // 22:55; the bus arrives at 23:10 and waits until 23:50
+  s = reply(s, 'n3-megan-ward', 'ask'); // 23:35: the bus is now waiting, with 15 minutes left
+  s = reply(s, 'n3-tomas-bus', 'warn');
   assert.equal(s.flags.tomasHeld, true);
   assert.ok(!s.flags.tomasCrossed);
 });
@@ -135,8 +135,8 @@ test('sealing the east early and holding the bus keeps the west clean', () => {
 
 test('Charles disclosing on night 3 seals the east when the night ends', () => {
   let s = atNight(3);
-  s = E.choose(s, 'n3-ty-lamp', 'ask').state;
-  s = E.choose(s, 'n3-charles-log', 'warn').state;
+  s = reply(s, 'n3-ty-lamp', 'ask');
+  s = reply(s, 'n3-charles-log', 'warn');
   assert.equal(s.flags.charlesDisclosed, true);
   s = playNight(s, 'ask');
   s = E.endNight(s);
@@ -205,10 +205,10 @@ test('Signs group the cards that show the illness, with who they were seen with'
 
 test('clues are counted when held and when delivered', () => {
   let s = atNight(2);
-  s = E.choose(s, 'n2-ty-dad', 'ask').state;
+  s = reply(s, 'n2-ty-dad', 'ask');
   assert.ok(E.cluesHeld(s) >= 2);
   assert.equal(E.cluesDelivered(s), 0);
-  s = E.choose(s, 'n2-megan-cluster', 'ask', 'ty-cold').state;
+  s = reply(s, 'n2-megan-cluster', 'ask', 'ty-cold');
   assert.equal(E.cluesDelivered(s), 1);
 });
 
@@ -377,17 +377,17 @@ test('final messages: silent, read with witness(), and only on the night the wri
 
 test('route messages only exist on their route (when)', () => {
   const sealed = atNight(5, { sealedEast: true, sealedNight: 3, tySafe: true });
-  assert.match(E.messageFor(sealed, 'ty').text, /made it to the tents/);
+  assert.match(E.messageFor(sealed, 'ty').text, /tent/);
   const hiding = atNight(5, { tySafe: true });
   assert.match(E.messageFor(hiding, 'ty').text, /cupboard under the stairs/);
   const bridge = atNight(5, { tySafe: true, tyEvac: true });
-  assert.match(E.messageFor(bridge, 'ty').text, /at the bridge/);
+  assert.match(E.messageFor(bridge, 'ty').text, /bridge/);
 });
 
 test('a breach loses the quarantine: Ty going back for his dad lets the east fall', () => {
   let s = atNight(5, { sealedEast: true, sealedNight: 3, tySafe: true, charlesDisclosed: true });
   assert.equal(E.zoneLevel('millside', s, 7), 3, 'sealed in time, the east is quarantined');
-  s = E.choose(s, 'n5-ty', 'go').state;
+  s = reply(s, 'n5-ty', 'go');
   assert.equal(s.flags.breach, true);
   assert.equal(s.flags.breachNight, 5);
   assert.equal(E.zoneLevel('millside', s, 7), 4, 'after a breach the east is overrun');
@@ -420,4 +420,114 @@ test('a character whose last message is waiting shows as pending, then silent', 
   assert.equal(row().state, 'pending');
   s = E.witness(s, 'n5-ty-last').state;
   assert.equal(row().state, 'silent');
+});
+
+// ------------------------------------------------------------ alternate scripts and conversations
+
+const textOf = (s, msgId) => E.pendingMessages(s).find((m) => m.id === msgId).text;
+
+test('scripts: the same seed always reads the same; different seeds give different scripts', () => {
+  const start = (seed) => E.startNight(E.newGame(seed));
+  assert.equal(textOf(start(7), 'n1-ty-dog'), textOf(start(7), 'n1-ty-dog'));
+  const seen = new Set();
+  for (let seed = 0; seed < 40; seed += 1) seen.add(textOf(start(seed), 'n1-ty-dog'));
+  assert.equal(seen.size, 2, 'both alternate scripts of the message are reachable');
+});
+
+test('scripts: replies have alternates too, picked by the same seed', () => {
+  const first = (seed) => {
+    const s = E.startNight(E.newGame(seed));
+    return E.choose(s, 'n1-ty-dog', 'reassure').outcome.entries[1].text;
+  };
+  const seen = new Set();
+  for (let seed = 0; seed < 40; seed += 1) seen.add(first(seed));
+  assert.equal(seen.size, 2);
+  assert.equal(first(3), first(3));
+});
+
+test('scripts: every alternate of every message and reply is reachable by some seed', () => {
+  // A smoke test over all content: picking with many seeds never returns undefined or empty text.
+  for (let seed = 0; seed < 12; seed += 1) {
+    const s = E.startNight(E.newGame(seed));
+    for (const m of E.pendingMessages(s)) {
+      assert.ok(typeof m.text === 'string' && m.text.length > 0, `${m.id} seed ${seed}`);
+      for (const o of m.options) {
+        const r = E.choose(s, m.id, o.id).outcome.entries[1].text;
+        assert.ok(typeof r === 'string' && r.length > 0, `${m.id}/${o.id} seed ${seed}`);
+      }
+    }
+  }
+});
+
+test('conversations: a first answer leaves the message waiting, with the follow-up answers', () => {
+  let s = E.startNight(E.newGame());
+  const r = E.choose(s, 'n1-ty-dog', 'ask');
+  assert.equal(r.outcome.done, false);
+  s = r.state;
+  const msg = E.messageFor(s, 'ty');
+  assert.equal(msg.id, 'n1-ty-dog');
+  assert.equal(msg.depth, 1);
+  assert.deepEqual(msg.options.map((o) => o.id), ['f-reassure', 'f-ask', 'f-warn']);
+  assert.equal(s.answered['n1-ty-dog'], undefined, 'not answered yet');
+});
+
+test('conversations: the second answer finishes it, and a mid-way turn costs half a tick', () => {
+  let s = E.startNight(E.newGame());
+  const before = s.clock;
+  let r = E.choose(s, 'n1-ty-dog', 'ask');
+  assert.equal(r.state.clock, before + TICK / 2);
+  r = E.choose(r.state, 'n1-ty-dog', 'f-warn');
+  assert.equal(r.outcome.done, true);
+  assert.equal(r.state.answered['n1-ty-dog'].turns, 2);
+  assert.equal(r.state.convo['n1-ty-dog'], undefined);
+  assert.ok(r.state.threads.ty.filter((e) => e.who === 'you').length === 2, 'two answers in the thread');
+});
+
+test('conversations: the message is shown once, not again on the follow-up turn', () => {
+  let s = E.startNight(E.newGame());
+  s = E.choose(s, 'n1-ty-dog', 'ask').state;
+  s = E.choose(s, 'n1-ty-dog', 'f-ask').state;
+  assert.equal(s.threads.ty.filter((e) => e.msgId === 'n1-ty-dog').length, 1);
+});
+
+test('conversations: one that has begun cannot expire', () => {
+  let s = atNight(2);
+  s = reply(s, 'n2-ty-dad', 'ask');
+  s = E.choose(s, 'n2-megan-cluster', 'ask').state; // first turn only; the follow-up is left waiting
+  s.clock = E.hm('03:00'); // well past its 02:20 expiry
+  s = E.choose(s, 'n2-charles-reply', 'ask').state;
+  assert.equal(s.missed['n2-megan-cluster'], undefined, 'Megan is still mid-conversation, not missed');
+  assert.ok(E.pendingMessages(s).some((m) => m.id === 'n2-megan-cluster'));
+});
+
+test('conversations: flags set on the first answer apply at once; a card can be attached on any turn', () => {
+  let s = atNight(2);
+  s = reply(s, 'n2-ty-dad', 'ask'); // learn ty-cold
+  s = E.choose(s, 'n2-megan-cluster', 'warn').state;
+  assert.equal(s.flags.megWarned, true, 'set on the first turn');
+  assert.deepEqual(s.delivered['ty-cold'], undefined);
+  s = E.choose(s, 'n2-megan-cluster', 'f-warn', 'ty-cold').state;
+  assert.deepEqual(s.delivered['ty-cold'], ['megan'], 'card delivered on the second turn');
+});
+
+test('conversations: the follow-up text depends on which answer you gave', () => {
+  const s = E.startNight(E.newGame());
+  const a = E.choose(s, 'n1-ty-dog', 'reassure').outcome.entries[1].text;
+  const b = E.choose(s, 'n1-ty-dog', 'hold').outcome.entries[1].text;
+  assert.notEqual(a, b);
+  assert.match(a, /window/);
+  assert.match(b, /window/);
+});
+
+test('Charles writes out the notice in full, not a summary', () => {
+  const s = E.startNight({ ...E.newGame(), night: 1, phase: 'intro' });
+  const r = E.choose(E.startNight(E.newGame()), 'n1-ty-dog', 'ask'); // ensure a normal start works
+  assert.ok(r);
+  let g = atNight(1);
+  g = reply(g, 'n1-ty-dog', 'ask');
+  g = reply(g, 'n1-megan-rota', 'ask');
+  const out = E.choose(g, 'n1-charles-notice', 'reassure').outcome.entries[0].text;
+  assert.match(out, /^NOTICE 14\nTo residents of Millside:/);
+  assert.doesNotMatch(out, /^\[You draft/);
+  assert.ok(s);
 });

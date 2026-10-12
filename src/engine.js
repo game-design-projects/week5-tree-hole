@@ -16,6 +16,14 @@ import { CAST, CAST_IDS, ENDINGS, ENDING_COUNT, FACTS, FACT_SOURCES, NIGHTS, TRU
 const clone = (s) => JSON.parse(JSON.stringify(s));
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
+// Deterministic choice between alternate scripts: a string, or an array of strings.
+export function pickScript(s, key, value) {
+  if (!Array.isArray(value)) return value;
+  let hsh = 2166136261 ^ (s.seed ?? 0);
+  for (let i = 0; i < key.length; i += 1) hsh = Math.imul(hsh ^ key.charCodeAt(i), 16777619);
+  return value[(hsh >>> 0) % value.length];
+}
+
 // ---------------------------------------------------------------- time
 
 // "22:20" → minutes since 22:00's calendar day; hours before 12 belong to the
@@ -32,9 +40,13 @@ export function clockLabel(minutes) {
 
 // ---------------------------------------------------------------- state
 
-export function newGame() {
+// `seed` picks between the alternate scripts a message can have, so replays differ. It is
+// part of the saved state, so a run reads the same way every time it is loaded.
+export function newGame(seed = 0) {
   return {
     v: 2,
+    seed: seed >>> 0,
+    convo: {}, // msgId → { path: [optId, …] } for conversations that are mid-way
     night: 1,
     phase: 'intro', // intro → play → nightEnd → (next night) intro … → slice | ending
     clock: NIGHT_START,
@@ -147,15 +159,23 @@ export function mapView(s, { onlyActive = true } = {}) {
 
 // ---------------------------------------------------------------- messages
 
-// Variant text, stage degradation and variant facts, resolved for state s.
+// Variant text, stage degradation and variant facts, resolved for state s. A message
+// can be mid-conversation: `options` are then the ones for the current turn.
 export function resolveMessage(msg, s) {
   const { variants, degrade, ...base } = msg;
   const v = (variants ?? []).find((x) => x.when(s));
   const { when: _when, id: variant, ...over } = v ?? {};
   const merged = { ...base, ...over, variant: variant ?? null };
+  merged.text = pickScript(s, `${msg.id}:${variant ?? ''}`, merged.text);
   const stage = stageOf(msg.npc, s);
   const extra = (degrade ?? {})[stage] ?? (stage > 0 ? (degrade ?? {})[1] : null);
-  if (extra && stage < 3) merged.text = `${merged.text}\n${extra}`;
+  if (extra && stage < 3) merged.text = `${merged.text}
+${extra}`;
+  const path = s.convo?.[msg.id]?.path ?? [];
+  let options = merged.options ?? [];
+  for (const id of path) options = options.find((o) => o.id === id)?.then?.options ?? [];
+  merged.options = options;
+  merged.depth = path.length;
   merged.atMin = hm(msg.at);
   merged.expiresMin = msg.expires ? hm(msg.expires) : null;
   return merged;
@@ -189,7 +209,7 @@ function addEntry(s, npc, entry) {
 // Messages that were not answered before they expired are lost.
 function sweepMissed(s) {
   for (const m of messagesOf(s)) {
-    if (!m.expires || !open(m, s) || hm(m.at) > s.clock) continue;
+    if (!m.expires || !open(m, s) || hm(m.at) > s.clock || s.convo?.[m.id]) continue;
     if (s.clock <= hm(m.expires)) continue;
     s.missed[m.id] = s.night;
     Object.assign(s.flags, m.missed?.set ?? {});
@@ -224,7 +244,9 @@ function addFact(s, id) {
   if (FACTS[id] && !s.facts.some((f) => f.id === id)) s.facts.push({ id, night: s.night });
 }
 
-// Reply to a message with a stance (option id), optionally attaching a card.
+// Answer a message with one of the current turn's options, optionally attaching a card.
+// A conversation can run for several turns (an option with `then`); it ends, and the
+// message is answered, on an option without one. Mid-way, a turn costs half as much time.
 export function choose(s0, msgId, optId, cardId = null) {
   if (s0.phase !== 'play') throw new Error('not playing');
   const pending = pendingMessages(s0).find((m) => m.id === msgId);
@@ -234,8 +256,11 @@ export function choose(s0, msgId, optId, cardId = null) {
   if (cardId && !s0.facts.some((f) => f.id === cardId)) throw new Error(`you do not hold card ${cardId}`);
 
   const s = clone(s0);
+  s.convo ??= {};
   const raw = messagesOf(s).find((m) => m.id === msgId);
-  addEntry(s, pending.npc, { who: 'them', text: pending.text, time: clockLabel(pending.atMin), msgId });
+  const path = s.convo[msgId]?.path ?? [];
+  const turnKey = `${msgId}:${path.join('>')}:${optId}`;
+  if (pending.depth === 0) addEntry(s, pending.npc, { who: 'them', text: pending.text, time: clockLabel(pending.atMin), msgId });
   for (const id of pending.facts ?? []) addFact(s, id);
   for (const id of opt.facts ?? []) addFact(s, id);
   Object.assign(s.flags, opt.set ?? {});
@@ -243,7 +268,7 @@ export function choose(s0, msgId, optId, cardId = null) {
 
   const entries = [{ who: 'you', kind: opt.stance, text: opt.text }];
   addEntry(s, pending.npc, { who: 'you', kind: opt.stance, text: opt.text });
-  const reply = { who: 'them', text: opt.reply };
+  const reply = { who: 'them', text: pickScript(s, turnKey, opt.reply) };
   entries.push(reply);
   addEntry(s, pending.npc, reply);
 
@@ -253,7 +278,7 @@ export function choose(s0, msgId, optId, cardId = null) {
     entries.push(note);
     addEntry(s, pending.npc, note);
     const hit = raw.carry?.[cardId];
-    const react = { who: 'them', text: hit ? hit.reply : raw.blank };
+    const react = { who: 'them', text: pickScript(s, `${msgId}:card:${cardId}`, hit ? hit.reply : raw.blank) };
     entries.push(react);
     addEntry(s, pending.npc, react);
     if (hit) {
@@ -265,10 +290,16 @@ export function choose(s0, msgId, optId, cardId = null) {
     }
   }
 
-  s.answered[msgId] = { opt: optId, card: cardId, night: s.night };
-  s.clock = Math.max(s.clock, pending.atMin) + TICK;
+  const done = !opt.then;
+  if (done) {
+    s.answered[msgId] = { opt: optId, card: cardId, night: s.night, turns: path.length + 1 };
+    delete s.convo[msgId];
+  } else {
+    s.convo[msgId] = { path: [...path, optId] };
+  }
+  s.clock = Math.max(s.clock, pending.atMin) + (done && path.length === 0 ? TICK : TICK / 2);
   settle(s);
-  return { state: s, outcome: { msgId, npc: pending.npc, optId, card: cardId, delivered, entries } };
+  return { state: s, outcome: { msgId, npc: pending.npc, optId, card: cardId, delivered, entries, done } };
 }
 
 // Remember the night a quarantine or an evacuation was breached.

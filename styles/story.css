@@ -50,15 +50,21 @@
 .map .zone.lv3 .core { fill: var(--lv3); } .map .zone.lv3 .halo { fill: var(--lv3); opacity: 0.32; }
 .map .zone.lv4 .core { fill: var(--lv4); } .map .zone.lv4 .halo { fill: var(--lv4); opacity: 0.38; animation: halo 2.2s ease-in-out infinite; }
 @keyframes halo { 50% { opacity: 0.14; r: 21; } }
-.map .zname { font: 13px var(--mono); fill: var(--mute); text-anchor: middle; }
-.map .dot circle { fill: #20293a; stroke: var(--mute); stroke-width: 1.2; }
-.map .dot .dglyph { font: 700 10px var(--mono); fill: var(--ink); text-anchor: middle; }
-.map .dot.unwell circle { fill: #4d3318; stroke: var(--lv2); }
-.map .dot.infected circle { fill: #4a1313; stroke: var(--lv4); animation: wander 1.6s ease-in-out infinite; }
-.map .dot.infected .dglyph { fill: #ffb0b0; }
+.map .dot { cursor: help; outline: none; }
+.map .dot .hit { fill: transparent; }
+.map .dot .pt { fill: #20293a; stroke: var(--mute); stroke-width: 1.2; transition: r 0.12s; }
+.map .dot.unwell .pt { fill: #4d3318; stroke: var(--lv2); }
+.map .dot.infected .pt { fill: #4a1313; stroke: var(--lv4); animation: wander 1.6s ease-in-out infinite; }
+.map .dot:hover .pt, .map .dot:focus .pt { r: 6.5; stroke: var(--ink); }
+.map .dot .dname {
+  font: 700 13px var(--mono); fill: var(--ink); text-anchor: middle; opacity: 0; pointer-events: none;
+  paint-order: stroke; stroke: #05070a; stroke-width: 3px; transition: opacity 0.12s;
+}
+.map .dot:hover .dname, .map .dot:focus .dname { opacity: 1; }
 @keyframes wander { 50% { stroke-width: 2.4; } }
 
-.rail .qlist { flex: 1; }
+.rail .qlist { flex: 1; align-content: start; }
+.rail .qlist > .q { align-self: start; }
 .q { cursor: pointer; }
 .q .glyph { color: var(--c); background: color-mix(in srgb, var(--c) 10%, var(--panel2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent); }
 .q b { color: var(--c); }
@@ -162,3 +168,55 @@
   .shift[data-tab='rail'] .rail { display: flex; }
   .clock b { font-size: 15px; }
 }
+
+/* ------------------------------------------------------------ gold: a card you can use here */
+
+:root { --gold: #ffcf4d; }
+.btn.small.gold { border-color: var(--gold); color: var(--gold); background: rgba(255, 207, 77, 0.1); box-shadow: 0 0 18px rgba(255, 207, 77, 0.22); }
+.btn.small.gold kbd { background: var(--gold); color: #1b1203; }
+.card-chip.gold { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(255, 207, 77, 0.35); }
+.card-chip.gold::before { content: '★ '; color: var(--gold); }
+
+/* ------------------------------------------------------------ tutorial */
+
+.tut { position: fixed; inset: 0; z-index: 60; }
+.tut-dim { position: absolute; inset: 0; background: rgba(4, 6, 9, 0.82); }
+.tut-spot { position: absolute; border-radius: 12px; border: 2px solid var(--gold); box-shadow: 0 0 0 9999px rgba(4, 6, 9, 0.78), 0 0 28px rgba(255, 207, 77, 0.35); pointer-events: none; transition: all 0.2s ease; }
+.tut-card { position: absolute; background: var(--panel2); border: 1px solid var(--line2); border-radius: 14px; padding: 16px 18px 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7); }
+.tut-step { font: 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); }
+.tut-card h3 { margin: 4px 0 6px; font: italic 400 28px/1.05 var(--serif); color: #fff4df; }
+.tut-card p { font-size: 14px; line-height: 1.5; color: #d6d9e2; }
+.tut-actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+.tut-actions .btn.primary { margin-left: auto; }
+.tut-actions .btn.primary kbd { background: rgba(0, 0, 0, 0.25); color: #1b1203; font: 700 10px var(--mono); border-radius: 4px; padding: 1px 5px; margin-left: 6px; }
+
+/* ------------------------------------------------------------ title: the town at night */
+
+.title {
+  background:
+    radial-gradient(ellipse 60% 46% at 16% 84%, rgba(255, 106, 61, 0.2), transparent 62%),
+    radial-gradient(ellipse 100% 60% at 50% 115%, #0c1b2c 0%, transparent 66%),
+    linear-gradient(#04060b, #09101a 70%, #0b1622);
+}
+.title .scene { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 44%; pointer-events: none; }
+.title .title-inner { margin-top: -10vh; }
+.scene .bldg { fill: #0a0f17; stroke: #151d2b; stroke-width: 1; }
+.scene .bldg.inst { fill: #0d141f; stroke: #1d2a3d; }
+.scene .hills { fill: #070b12; }
+.scene .win { fill: #ffb547; opacity: 0.85; animation: flick 3.2s ease-in-out infinite; }
+.scene .win.red { fill: #ff5a3c; }
+.scene .win.dim { opacity: 0.45; animation: none; }
+@keyframes flick { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.4; } }
+.scene .beacon { animation: pulse 4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+.scene .river { fill: #0c2236; }
+.scene .ripple { stroke: #1b3f5e; stroke-width: 1.4; opacity: 0.6; }
+.scene .arch { fill: none; stroke: #2b3a4f; stroke-width: 8; }
+.scene .deck { fill: #2b3a4f; }
+.scene .lamp { fill: #ffd796; }
+.scene .lamp.red { fill: #ff4d4d; }
+.scene .lamp.farm { fill: #ffd796; opacity: 0.9; }
+.scene .lamp.blink { animation: blinkl 1.8s steps(2, end) infinite; }
+@keyframes blinkl { 50% { opacity: 0.1; } }
+.scene .mast { fill: #1a2433; }
+.fast .scene .win, .fast .scene .beacon, .fast .scene .lamp.blink { animation: none; }

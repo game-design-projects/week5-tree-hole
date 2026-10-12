@@ -10,6 +10,23 @@ export function atNight(n, flags = {}) {
   return E.startNight(s);
 }
 
+// Answer a message all the way through: the given option first (with an optional card), then,
+// if the conversation continues, the follow-up answers that match the first answer's stance.
+export function reply(s, msgId, optId, card = null) {
+  const first = E.pendingMessages(s).find((m) => m.id === msgId);
+  const stance = first.options.find((o) => o.id === optId).stance;
+  let r = E.choose(s, msgId, optId, card);
+  s = r.state;
+  let guard = 0;
+  while (!r.outcome.done && guard++ < 6) {
+    const msg = E.pendingMessages(s).find((m) => m.id === msgId);
+    const opt = msg.options.find((o) => o.stance === stance) ?? msg.options[0];
+    r = E.choose(s, msgId, opt.id);
+    s = r.state;
+  }
+  return s;
+}
+
 // Reply to every waiting message with the option whose stance matches `pick`
 // (a stance name, or a function(msg) → option id). Returns the final state.
 // Reply to every waiting message with the option whose stance matches `pick`
@@ -20,7 +37,7 @@ export function playNight(s, pick) {
     const msg = E.pendingMessages(s)[0];
     if (!msg.options.length) { s = E.witness(s, msg.id).state; continue; }
     const opt = typeof pick === 'function' ? pick(msg) : msg.options.find((o) => o.stance === pick) ?? msg.options[0];
-    s = E.choose(s, msg.id, typeof opt === 'string' ? opt : opt.id).state;
+    s = reply(s, msg.id, typeof opt === 'string' ? opt : opt.id);
   }
   return s;
 }
@@ -61,7 +78,7 @@ export function styledPlayer(stances, { cards = true, overrides = {}, nights = 7
       if (!msg.options.length) { s = E.witness(s, msg.id).state; continue; }
       const opt = msg.options.find((o) => o.id === overrides[msg.id]) ?? msg.options.find((o) => o.stance === stance) ?? msg.options[0];
       const card = cards ? s.facts.map((f) => f.id).find((id) => CLUES.has(id) && msg.carry?.[id] && !(s.delivered[id] ?? []).length) ?? null : null;
-      s = E.choose(s, msg.id, opt.id, card).state;
+      s = reply(s, msg.id, opt.id, card);
     }
     s = E.endNight(s);
     if (s.phase === 'intro') s = E.startNight(s);

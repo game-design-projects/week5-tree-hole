@@ -10,16 +10,17 @@ NYU CS-GY 6553 Game Design. All content is pre-written; the game makes no API ca
 
 ## How to play
 
-Seven nights, 22:00 to 06:00. People write to you; you pick whom to answer. Every reply spends time, and some people will not wait.
+Seven nights, 22:00 to 06:00. People write to you; you pick whom to answer. Every answer spends time, and some people will not wait. Each reply you choose is a real answer to what they asked, and small differences change what they tell you next.
 
 | Key | Action |
 |---|---|
-| `1` `2` `3` | reply: **Reassure**, **Ask**, **Warn** or **Hold back** |
+| `1` `2` `3` | pick an answer. Conversations take a couple of turns |
 | `C` | attach a Context Window card to your reply (delivers it to them) |
 | `Enter` | continue |
 
+- **Tutorial:** the first night begins with a short spotlight tour. Replay it from the menu.
 - **The cast:** Ty (Millside, east), Charles (the Institute), Megan (the clinic), Amelia (the radio, west), Tomas (the night bus) and Ana (the hills). Each writes differently, and their writing falls apart as the illness takes hold.
-- **The map:** Varrow's zones go from quiet to overrun. Each person is a dot, and infected ones turn red and walk toward light and noise. An infected person stops writing to you.
+- **The map:** only people who have written to you appear, as small dots (hover one to see who). The glow around them shows how far the illness has spread; an infected person's dot turns red and walks toward light and noise, and they stop writing to you.
 - **The Context Window:** everything you have learned, one card per fact, grouped by who told you, plus **Signs**: the six repeating signs of the illness and who showed them. The game never connects the cards for you.
 - **Last messages:** someone who turns writes one last message, falling apart as they go. You can read it but not answer it. After that they stop writing and their dot turns red.
 - **Endings:** six, numbered best to worst, from *Dawn Shift* (stopped early, nobody turned) to *Last Signal* (silence). Which one you reach depends on what reached whom, and when.
@@ -30,7 +31,7 @@ Plain HTML + native ES modules, no bundler, no runtime dependencies.
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:5173  (?fast=1 no animation delays, ?ending=1…6 previews an ending, ?debug=1 logs)
+pnpm dev            # http://localhost:5173  (?fast=1 no animation delays, ?ending=1…6 previews an ending, ?tutorial=1|0, ?debug=1 logs)
 pnpm test           # node --test: engine, content integrity, all six endings reachable
 pnpm test:e2e       # playwright-core in your installed Chrome
 pnpm build          # → dist/

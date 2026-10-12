@@ -6,6 +6,15 @@ import { CAST, CAST_IDS, ENDINGS, ENDING_COUNT, FACTS, FACT_SOURCES, NIGHTS, clu
 import { hm } from '../src/engine.js';
 
 const all = NIGHTS.flatMap((n) => n.messages);
+
+// A script is a string or a non-empty array of non-empty strings (alternates picked by seed).
+const scripts = (v) => (Array.isArray(v) ? v : [v]);
+const validScript = (v) => scripts(v).length > 0 && scripts(v).every((t) => typeof t === 'string' && t.trim().length > 0);
+// Every option node in a message, with the turn it belongs to.
+function* nodes(options, depth = 0, path = '') {
+  yield { options, depth, path };
+  for (const o of options) if (o.then) yield* nodes(o.then.options, depth + 1, `${path}${o.id}>`);
+}
 const STANCES = ['reassure', 'ask', 'warn', 'hold'];
 
 test('version matches package.json', () => {
@@ -31,25 +40,60 @@ test('message ids are unique and every message is well formed', () => {
     assert.ok(CAST[m.npc], `${m.id}: npc`);
     assert.ok(Number.isFinite(hm(m.at)), `${m.id}: at`);
     if (m.expires) assert.ok(hm(m.expires) > hm(m.at), `${m.id}: expires after it arrives`);
-    assert.ok(m.text.trim(), `${m.id}: text`);
+    assert.ok(validScript(m.text), `${m.id}: text`);
+    for (const v of m.variants ?? []) if (v.text != null) assert.ok(validScript(v.text), `${m.id}/${v.id}: variant text`);
     if (m.final) {
       assert.equal(m.options.length, 0, `${m.id}: a character's last words cannot be answered`);
       continue;
     }
-    assert.ok(m.options.length >= 2 && m.options.length <= 3, `${m.id}: 2–3 replies`);
-    assert.equal(typeof m.blank, 'string', `${m.id}: blank reaction for a card with no meaning`);
+    assert.ok(m.options.length >= 2 && m.options.length <= 3, `${m.id}: 2–3 answers`);
+    assert.ok(validScript(m.blank), `${m.id}: blank reaction for a card with no meaning`);
     for (const f of m.facts ?? []) assert.ok(FACTS[f], `${m.id}: fact ${f}`);
   }
 });
 
-test('options use known stances, have unique ids and a written reply', () => {
-  for (const m of all) {
-    assert.equal(new Set(m.options.map((o) => o.id)).size, m.options.length, m.id);
-    for (const o of m.options) {
-      assert.ok(STANCES.includes(o.stance), `${m.id}/${o.id}: stance`);
-      assert.ok(o.text && o.reply, `${m.id}/${o.id}: text and reply`);
-      for (const f of o.facts ?? []) assert.ok(FACTS[f], `${m.id}/${o.id}: fact ${f}`);
+test('options use known stances, have unique ids, and every answer has a written reply', () => {
+  for (const m of all.filter((x) => !x.final)) {
+    const sets = [m.options, ...(m.variants ?? []).filter((v) => v.options).map((v) => v.options)];
+    for (const opts of sets) {
+      for (const { options, path } of nodes(opts)) {
+        assert.ok(options.length >= 2 && options.length <= 3, `${m.id}${path}: 2–3 answers per turn`);
+        assert.equal(new Set(options.map((o) => o.id)).size, options.length, `${m.id}${path}: unique ids`);
+        for (const o of options) {
+          assert.ok(STANCES.includes(o.stance), `${m.id}/${path}${o.id}: stance`);
+          assert.ok(o.text?.trim(), `${m.id}/${path}${o.id}: answer text`);
+          assert.ok(validScript(o.reply), `${m.id}/${path}${o.id}: reply`);
+          for (const f of o.facts ?? []) assert.ok(FACTS[f], `${m.id}/${path}${o.id}: fact ${f}`);
+        }
+      }
     }
+  }
+});
+
+test('alternate scripts stay consistent: every alternate of a reply that continues ends on a question-or-prompt', () => {
+  // A reply that has a follow-up must hand the conversation back (no alternate may end the exchange).
+  for (const m of all) {
+    for (const { options } of nodes(m.options)) {
+      for (const o of options) {
+        if (!o.then) continue;
+        for (const alt of scripts(o.reply)) assert.match(alt.trim(), /[?.…—]|\w$/, `${m.id}/${o.id}: reply alt is not empty`);
+      }
+    }
+  }
+});
+
+test('conversations: a continuing answer leads to a follow-up with its own answers; none loop forever', () => {
+  for (const m of all) {
+    for (const { depth } of nodes(m.options)) assert.ok(depth <= 3, `${m.id}: conversation depth`);
+  }
+  assert.ok(all.some((m) => m.options.some((o) => o.then)), 'at least some conversations run more than one turn');
+});
+
+test('Charles drafts what he is asked for: the notice is in your answer, not summarised in brackets', () => {
+  const drafts = all.filter((m) => m.npc === 'charles').flatMap((m) => m.options.filter((o) => /NOTICE|STAFF NOTICE|STANDARD REPLY/.test(o.text)));
+  assert.ok(drafts.length >= 4, 'several nights have a real drafted notice');
+  for (const o of all.filter((m) => m.npc === 'charles').flatMap((m) => m.options)) {
+    assert.doesNotMatch(o.text, /^\[You draft/, 'no bracketed summaries of a draft');
   }
 });
 
@@ -57,7 +101,7 @@ test('carry reactions refer to real cards', () => {
   for (const m of all) {
     for (const [card, hit] of Object.entries(m.carry ?? {})) {
       assert.ok(FACTS[card], `${m.id}: card ${card}`);
-      assert.ok(hit.reply, `${m.id}: ${card} reply`);
+      assert.ok(validScript(hit.reply), `${m.id}: ${card} reply`);
       for (const f of hit.facts ?? []) assert.ok(FACTS[f], `${m.id}: ${card} → fact ${f}`);
     }
   }
@@ -81,7 +125,7 @@ test('the six signs repeat: each sign shows up on at least two different cast me
 });
 
 test('every character writes in their own voice (distinct opening styles)', () => {
-  const firstLine = (id) => all.filter((m) => m.npc === id).map((m) => m.text.split('\n')[0]);
+  const firstLine = (id) => all.filter((m) => m.npc === id).flatMap((m) => scripts(m.text).map((t) => t.split('\n')[0]));
   assert.ok(firstLine('charles').every((l) => /^(Good evening|Notice|1\.|Further)/.test(l)), 'Charles writes memos');
   assert.ok(firstLine('amelia').every((l) => /^Good evening, Varrow/.test(l)), 'Amelia opens on air');
   assert.ok(firstLine('ty').every((l) => l === l.toLowerCase()), 'Ty is lowercase');
@@ -94,4 +138,37 @@ test('six endings, numbered 1–6, only the last is silent', () => {
     assert.ok(e.title && e.description && e.kicker, `ending ${n}`);
     assert.equal(Boolean(e.silence), n === 6, `ending ${n} silence`);
   }
+});
+
+// ------------------------------------------------------------ one world
+
+// Every string a character says (their messages, replies and card reactions), in any script.
+// The player's own answers (objects with a `stance`) are not the character speaking.
+function said(npc) {
+  const out = [];
+  const walk = (v) => {
+    if (typeof v === 'string') out.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) if (!(k === 'text' && 'stance' in v)) walk(x);
+    }
+  };
+  for (const m of all.filter((x) => x.npc === npc)) walk(m);
+  return out.join('\n');
+}
+
+test("the town is one world: every character is mentioned in at least three other characters' chats", () => {
+  const names = Object.fromEntries(['ty', 'charles', 'megan', 'amelia', 'tomas', 'ana'].map((n) => [n, new RegExp(`\\b${n}(?:'?s)?\\b`, 'i')]));
+  for (const [who, re] of Object.entries(names)) {
+    const mentionedBy = CAST_IDS.filter((other) => other !== who && re.test(said(other)));
+    assert.ok(mentionedBy.length >= 3, `${who} is mentioned by only ${mentionedBy.join(', ') || 'nobody'}`);
+  }
+});
+
+test('each character has a personality beyond how they type: personal detail cards exist', () => {
+  for (const id of CAST_IDS) {
+    const personal = Object.values(FACTS).filter((f) => f.src === id && !f.clue && !f.sign);
+    assert.ok(personal.length >= 2, `${id} has at least two non-plot cards`);
+  }
+  assert.equal(new Set(CAST_IDS.map((id) => CAST[id].blurb)).size, 6);
 });

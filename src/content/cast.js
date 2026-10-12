@@ -2,12 +2,12 @@
 // has its own way of writing; see docs/STORY_PLAN.md ("How each character writes").
 
 export const CAST = {
-  ty: { handle: 'Ty', blurb: '17 · Millside · east bank', glyph: '☻', tone: 'ty' },
-  charles: { handle: 'Charles', blurb: 'night facilities · the Institute', glyph: '▣', tone: 'charles' },
-  megan: { handle: 'Megan', blurb: 'nurse · Varrow clinic · centre', glyph: '+', tone: 'megan' },
-  amelia: { handle: 'Amelia', blurb: 'community radio · Chapel Lane', glyph: '♪', tone: 'amelia' },
-  tomas: { handle: 'Tomas', blurb: 'night bus · Old Bridge route', glyph: '➤', tone: 'tomas' },
-  ana: { handle: 'Ana', blurb: 'farm · North Hills · one bar', glyph: '△', tone: 'ana' },
+  ty: { handle: 'Ty', blurb: '17 · Millside · plays bass badly', glyph: '☻', tone: 'ty' },
+  charles: { handle: 'Charles', blurb: 'night facilities · the Institute · tea at exact hours', glyph: '▣', tone: 'charles' },
+  megan: { handle: 'Megan', blurb: 'nurse · Varrow clinic · ex-paramedic', glyph: '+', tone: 'megan' },
+  amelia: { handle: 'Amelia', blurb: 'community radio · Chapel Lane · poems on Sundays', glyph: '♪', tone: 'amelia' },
+  tomas: { handle: 'Tomas', blurb: 'night bus · sings Dolly Parton', glyph: '➤', tone: 'tomas' },
+  ana: { handle: 'Ana', blurb: 'goat farm · North Hills · one bar', glyph: '△', tone: 'ana' },
 };
 
 export const CAST_IDS = Object.keys(CAST);

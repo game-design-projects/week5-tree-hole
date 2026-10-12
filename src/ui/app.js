@@ -5,14 +5,14 @@ import { mountTitle } from './title.js';
 import { mountPlay } from './play.js';
 import { mountEnding } from './ending.js';
 
-export function createApp(root, { log, fast, store, forceEnding = null }) {
+export function createApp(root, { log, fast, store, forceEnding = null, tutorial = null }) {
   let state = forceEnding ? E.previewState(forceEnding) : store.load();
   let unmount = null;
   let screen = null;
 
   const setState = (s) => { state = s; store.save(s); };
   const newGame = () => {
-    setState(E.newGame());
+    setState(E.newGame(Math.floor(Math.random() * 2 ** 31)));
     log.event('game', 'new game');
     show('play');
   };
@@ -31,7 +31,7 @@ export function createApp(root, { log, fast, store, forceEnding = null }) {
       });
     } else if (name === 'play') {
       unmount = mountPlay(root, {
-        log, fast,
+        log, fast, tutorial,
         getState: () => state,
         setState,
         onEnding: () => show('ending'),

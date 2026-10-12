@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-10-12
+
+Playtest feedback, ten changes.
+
+### Added
+
+- **A tutorial** the first time night 1 begins: a spotlight on the real interface explains time, the map, threads, answers, the Context Window and carrying a card. It can be skipped, and replayed from the menu (`?tutorial=1` forces it, `?tutorial=0` skips it).
+- **Variant scripts.** Messages and replies have alternate scripts, picked per game by a seed that is saved with the run, so replays read differently.
+- **Conversations.** Most messages now run two turns: you answer, the person reacts with a follow-up, and you answer again to reach a conclusion. Turns mid-way cost half the time, and a conversation you have begun cannot expire.
+- **Personality.** Each character has quirks and personal detail cards beyond how they type (Ty's bass and Pickle, Charles's tea and model railway, Megan's cat Warfarin, Amelia's Sunday poems, Tomas's Dolly Parton, Ana's paperbacks).
+- **One world.** Every character is mentioned by at least three others (a test checks it).
+
+### Changed
+
+- **Every reply is an answer.** The Reassure / Ask / Warn labels are gone. Each option is a real answer to what the person asked, with small differences in emphasis that change what they say next.
+- **Charles's drafts are written out** in full in your answer (Notices 14–18, the switchboard reply and staff notice), and Amelia's bulletin is given as text, instead of a bracketed summary.
+- **The map shows no place names.** The areas glow by how far the illness has spread, and each person is a small dot; hover or focus a dot to see who it is.
+- **The thread list** stacks at natural height instead of stretching to fill the panel.
+- **"Attach a card" turns gold** when you hold a card the person would react to (and the useful cards are starred in the tray).
+- **The title screen** is now the town at night: the lit Institute, the river and stone bridge, the radio mast and a farm light in the hills; its text matches the plot.
+
 ## [0.4.0] - 2026-10-11
 
 The story is complete: nights 5–7 and all six endings, reachable by play.
