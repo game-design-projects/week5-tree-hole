@@ -2,7 +2,7 @@
 // Build the uploadable game: copy only runtime files into dist/.
 // dist/ is a self-contained static site (index.html at the root, relative
 // paths). `butler push dist stevenli-phoenix-work/tree-hole:html5` publishes it.
-import { cp, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { access, cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -31,6 +31,11 @@ export async function build({ outDir = join(ROOT, 'dist') } = {}) {
       filter: (src) => !/\.test\.(m?js)$/.test(src) && !basename(src).startsWith('.'),
     });
   }
+  // No key (src/llm-key.js, written by CI from a secret) → an empty one: the game plays offline.
+  const keyFile = join(outDir, 'src', 'llm-key.js');
+  const hasKey = await access(keyFile).then(() => true, () => false);
+  if (!hasKey) await writeFile(keyFile, "export default '';\n");
+  console.log(`[build] LLM key: ${hasKey ? 'included' : 'none, offline build'}`);
   const { bytes, files } = await dirSize(outDir);
   console.log(`[build] ${files} files, ${(bytes / 1024).toFixed(1)} KiB → ${outDir}`);
   return { outDir, bytes, files };

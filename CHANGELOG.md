@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-12
+
+Typed answers, for real: judged by Jev, answered in character as it streams, and no server in between.
+
+### Added
+
+- **Off-topic replies.** Jev can answer “other” when typed text answers none of the replies on offer. They then ask the same thing again in their own words (Haiku, streamed) and the message keeps waiting, with its replies still on offer. After `MAX_REASKS` (3) re-asks, the next off-topic reply ends it: they say goodbye and stop using the service. Off-topic replies still cost what they give away. The operators’ questions and a panicking user’s last words do not take “other”. Leaving this way is not a panic: the paper does not report complaints or screenshots.
+- **The going-live test session judges typed answers too.** Typing “hi” no longer passes: Jev finds it off-topic and Operations asks again (streamed). After `MAX_REASKS` the test is marked failed and the service goes live anyway.
+- **`pnpm test` takes tags** (`scripts/test.mjs`): with none it runs the unit tests only and never calls a real LLM, which is what CI runs; `--tag live` adds the paid live game. The unit tests also replace `fetch` with one that fails the test, so a real network call cannot slip in.
+- **`pnpm test --tag live`**: one whole game through the real UI and the real models, every message answered by typing the text of a reply on offer, to the morning paper. Every true/false question is asked of Jev, never of an LLM: whether the judged branch and the crossing of the line match the reply that was typed, and whether each rewritten reaction answers what was typed and adds no facts. The key comes from `.dev.vars` only (never the environment), the test is skipped without it, and every raw OpenRouter response is saved under `e2e/artifacts/live/`. Plain `pnpm test` (and CI) never runs it; it needs the tag.
+
+### Changed
+
+- **Typed replies are judged by Jev, not by an LLM.** Jev (`typesafe/jev-1.13`, OpenRouter's Decisions API) answers which branch the reply is closest to (a choice), how far it crosses the line (a 0–3 score), and, for each other user, whether it passes on a fact only they gave (true/false). The score decides whether the reply crosses the line (P(level ≥ 2) ≥ 0.5); the true/false answers decide whose information it used, falling back to the likeliest one.
+- **Claude Haiku 5.5 only rewords the reaction** to answer what was typed, changing as little as it can, and it **streams**: the reaction fills their bubble as it is written, with reasoning off so the first words come within about a second of the judgement. Haiku plays the person (who they are, in Varrow, talking to an anonymous chat service, in character, with what they wrote before as the voice to match), and keeps the story of the scripted reaction rather than every word. A rewording that runs past a cap relative to the scripted line is cut off, and on any failure the scripted reaction stands and the text box stays. A streamed reaction does not type or decrypt a second time.
+- **No server.** The static page calls OpenRouter directly with a spend-capped key limited to those two models, from `src/llm-key.js` (not in git; CI writes it from the `OPENROUTER_API_KEY` secret, and a build without it plays offline). For local play, `pnpm dev` serves that module from `.dev.vars` in memory, so the dev key is never written into `src/` or a build. `?llm=<url>` is gone; `?llm=0` still turns typed replies off.
+- **The test session's city** comes from Settings, else New York. There is no IP lookup any more.
+
+### Removed
+
+- **`worker/`**, the Cloudflare Worker proxy.
+
+### Fixed
+
+- **Next is never a dead click.** While the other person's reaction was still typing (0.6–2.2 s), Next was disabled but looked enabled, so a click did nothing. Now the first press during typing shows the reaction at once and the next press moves on; Enter works the same way.
+
 ## [0.6.0] - 2026-10-12
 
 The isolation rework. You are the service now, and the line between sessions is the game. Design: `docs/DESIGN.md`.

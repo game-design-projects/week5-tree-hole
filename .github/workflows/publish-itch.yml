@@ -1,6 +1,8 @@
 # Runs the unit tests on every push to main, then publishes the build to
 # itch.io (stevenli-phoenix-work/tree-hole:html5) via butler.
 # Needs secret BUTLER_API_KEY (org-level secret on game-design-projects).
+# Optional secret OPENROUTER_API_KEY: a spend-capped key limited to the game's two
+# models. It ships inside the static build; without it the build plays offline.
 name: Publish to itch.io
 
 on:
@@ -41,6 +43,17 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Write the LLM key
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "$OPENROUTER_API_KEY" ]; then
+            printf "export default '%s';\n" "$OPENROUTER_API_KEY" > src/llm-key.js
+          else
+            echo '::warning::No OPENROUTER_API_KEY secret: offline build (no text box)'
+          fi
 
       - name: Build
         run: pnpm build

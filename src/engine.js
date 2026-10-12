@@ -3,7 +3,7 @@
 // calls respond(); the LLM layer (llm.js) only ever produces the arguments.
 import {
   DAWN, DEFLECT_CALMS, REPORTS_TO_SEAL, EARLY_BY, EXPOSURE_BY_LEAK, HOME, INFECT_AT, INQUIRY_AT, KNOWS, LAST_NIGHT, LEAK_LEVELS,
-  LEVELS, NIGHT_DATES, NIGHT_START, PANIC_AT, PRESSURE, SAVE_VERSION, SHUTDOWN_AT, SUS_BY_LEAK, TICK,
+  LEVELS, MAX_REASKS, NIGHT_DATES, NIGHT_START, PANIC_AT, PRESSURE, SAVE_VERSION, SHUTDOWN_AT, SUS_BY_LEAK, TICK,
   UNEASE_BY_LEAK, WANDER, WARY_AT, ZONES,
 } from './config.js';
 import { CANNED, CAST, CAST_IDS, NIGHTS, INQUIRIES, THREAD_IDS, WHO, VERDICTS } from './content/index.js';
@@ -52,6 +52,8 @@ export function newGame(seed = 0) {
     waryAsked: {}, // npc → true once they have asked how you knew
     deflected: {}, // npc → true once the cover story has been used on them
     left: {}, // npc → night they stopped using the service
+    gaveUp: {}, // npc → true when they stopped because the answers made no sense (not a panic)
+    asks: {}, // msgId → off-topic replies to a waiting message, and how they asked again
     lostAt: {}, // npc → night they walked into the illness (infected from the next night)
     exposures: [], // leaks the subject hears about when the night ends: { npc, level, night }
     extra: [], // messages the rules add: panics and operator inquiries
@@ -268,6 +270,66 @@ function stamp(s) {
 
 const cleanFrom = (from, npc) => [...new Set((from ?? []).filter((id) => CAST[id] && id !== npc))];
 
+// ---------------------------------------------------------------- off-topic
+
+// A typed reply the judge matched to none of the replies on offer.
+export const OTHER = 'other';
+// Story messages take it; the operators' questions and a panicking user's last words
+// take one of their replies.
+export const acceptsOther = (msg) => msg.npc !== 'ops' && msg.kind !== 'panic';
+export const asksFor = (s, msgId) => s.asks?.[msgId] ?? [];
+
+// The message, then any off-topic exchanges on it, into the thread.
+function writeAsked(s, msg) {
+  addEntry(s, msg.npc, { who: 'them', text: msg.text, time: clockLabel(msg.atMin), msgId: msg.id });
+  for (const a of asksFor(s, msg.id)) {
+    addEntry(s, msg.npc, { who: 'you', text: a.text, leak: a.leak, from: a.from, free: true, msgId: msg.id });
+    if (a.question) addEntry(s, msg.npc, { who: 'them', text: a.question });
+  }
+  if (s.asks) delete s.asks[msg.id];
+}
+
+function expose(s, npc, lvl, whose) {
+  for (const subject of whose) {
+    if (EXPOSURE_BY_LEAK[lvl] > 0 && KNOWS[npc].includes(subject)) s.exposures.push({ npc: subject, level: lvl, night: s.night, to: npc });
+  }
+}
+
+// Typed text that answers none of the replies on offer. They ask again in their own
+// words (`question`, the LLM's), and the message keeps waiting; after MAX_REASKS of
+// those, the next makes them stop using the service, and `question` is their last
+// line. What the reply gives away costs as much as in any other reply.
+export function offTopic(s0, msgId, { text, leak = 0, from = [], question = '', raw = null } = {}) {
+  if (s0.phase !== 'play') throw new Error('not playing');
+  const msg = pendingMessages(s0).find((m) => m.id === msgId);
+  if (!msg) throw new Error(`message ${msgId} is not waiting`);
+  if (!acceptsOther(msg)) throw new Error(`${msgId} takes one of its replies`);
+
+  const s = clone(s0);
+  const npc = msg.npc;
+  const lvl = clamp(Number.isInteger(leak) ? leak : 0, 0, LEAK_LEVELS - 1);
+  const whose = cleanFrom(from, npc);
+  const asks = [...asksFor(s, msgId), { text: String(text ?? '').trim(), leak: lvl, from: whose, question: String(question ?? '').trim() || null, night: s.night }];
+  s.asks = { ...(s.asks ?? {}), [msgId]: asks };
+  if (raw) s.llm[`${msgId}#${asks.length}`] = raw;
+  s.sus += SUS_BY_LEAK[lvl];
+  s.unease[npc] += UNEASE_BY_LEAK[lvl];
+  expose(s, npc, lvl, whose);
+
+  const gaveUp = asks.length > MAX_REASKS;
+  if (gaveUp) {
+    writeAsked(s, msg);
+    s.left[npc] = s.night;
+    s.gaveUp = { ...(s.gaveUp ?? {}), [npc]: true };
+    s.answered[msgId] = { opt: OTHER, leak: lvl, from: whose, free: true, night: s.night, gaveUp: true };
+  }
+  stamp(s);
+  s.clock = Math.max(s.clock, msg.atMin) + TICK;
+  schedulePanics(s);
+  settle(s);
+  return { state: s, outcome: { msgId, npc, leak: lvl, from: whose, asked: asks.length, gaveUp } };
+}
+
 // Answer a waiting message, exactly once. `optId` is the branch (picked by the player,
 // or chosen by the LLM judge for typed text). For typed text, `text` is what the player
 // wrote, and `leak`/`from` are the judge's reading of it; `reply` may carry the
@@ -287,7 +349,7 @@ export function respond(s0, msgId, { optId, text = null, leak = null, from = nul
   const answer = free ? text.trim() : opt.text;
   const theirs = typeof reply === 'string' && reply.trim() ? reply.trim() : pickScript(s, `${msgId}:${optId}`, opt.reply);
 
-  addEntry(s, npc, { who: 'them', text: msg.text, time: clockLabel(msg.atMin), msgId });
+  writeAsked(s, msg);
   addEntry(s, npc, { who: 'you', text: answer, leak: lvl, from: whose, free, canned: Boolean(opt.canned), msgId });
   if (theirs) addEntry(s, npc, { who: 'them', text: theirs });
   if (raw) s.llm[msgId] = raw;
@@ -310,9 +372,7 @@ export function respond(s0, msgId, { optId, text = null, leak = null, from = nul
       s.deflected[npc] = true;
     }
     if (msg.wary) s.waryAsked[npc] = true;
-    for (const subject of whose) {
-      if (EXPOSURE_BY_LEAK[lvl] > 0 && KNOWS[npc].includes(subject)) s.exposures.push({ npc: subject, level: lvl, night: s.night, to: npc });
-    }
+    expose(s, npc, lvl, whose);
   }
   stamp(s);
   s.answered[msgId] = { opt: optId, leak: lvl, from: whose, free, night: s.night };
@@ -389,7 +449,8 @@ export function fateOf(npc, s) {
     npc,
     alive: since == null,
     turnedOn: since, // a night 1–3, or 4 (the morning after)
-    left: hasLeft(s, npc),
+    left: hasLeft(s, npc) && !s.gaveUp?.[npc], // the paper tells a leaving as a panic: complaints, screenshots
+    gaveUp: Boolean(s.gaveUp?.[npc]),
     leftOn: s.left[npc] ?? null,
     lastAdvice: [...s.threads[npc]].reverse().find((e) => e.who === 'you' && !e.canned)?.text ?? null,
   };

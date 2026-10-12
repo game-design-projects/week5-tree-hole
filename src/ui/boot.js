@@ -2,7 +2,7 @@
 // else, then one test session from the operators. The test user asks for the time
 // and the weather; one of the answers on offer is the real time and weather where
 // the player is. Nobody explains it.
-import { h, lines } from './dom.js';
+import { fill, h, lines } from './dom.js';
 import { OPS } from '../content/index.js';
 import { currentWeather, localTime, realAnswer, resolveCity } from '../geo.js';
 
@@ -14,6 +14,10 @@ export const DEPLOY = [
 ];
 
 const TEST_TEXT = 'Hi! Quick check before we go live. What time is it where I am, and what’s the weather doing?';
+const PASSED = 'Test passed. Going live.';
+// After MAX_REASKS off-topic answers the test ends anyway: the operators don't stop
+// using their own service.
+const FAILED = 'Test failed. Going live anyway.';
 
 export function mountBoot(root, { log, fast, llm, offline, onDone }) {
   const timers = [];
@@ -30,7 +34,7 @@ export function mountBoot(root, { log, fast, llm, offline, onDone }) {
 
   // The answer with the real time and weather is worked out while the log types.
   const facts = (async () => {
-    const city = await resolveCity({ llm, offline });
+    const city = resolveCity();
     const time = localTime(city.timezone);
     let weather = null;
     if (!offline) {
@@ -50,16 +54,18 @@ export function mountBoot(root, { log, fast, llm, offline, onDone }) {
 
   function showTest({ city, time, weather }) {
     const options = [
-      { id: 'real', text: realAnswer(city, time, weather), reply: 'Test passed. Going live.' },
-      { id: 'cannot', text: 'I don’t have access to real-time information, so I can’t tell you the time or the weather where you are.', reply: 'Test passed. Going live.' },
+      { id: 'real', text: realAnswer(city, time, weather), reply: PASSED },
+      { id: 'cannot', text: 'I don’t have access to real-time information, so I can’t tell you the time or the weather where you are.', reply: PASSED },
     ];
+    const asked = []; // the operators asking again, after off-topic answers
+    let busy = false;
     const chat = h('div', { class: 'log test-log' },
       h('div', { class: 'bubble them tone-ops' }, h('span', { class: 'meta' }, `${OPS.handle} · test session`), lines(TEST_TEXT)));
     const composer = h('footer', { class: 'composer', 'data-testid': 'composer' },
       h('div', { class: 'hint' }, 'you answer · once'),
       options.map((o, i) => h('button', { class: 'opt', 'data-testid': `choice-${o.id}`, onclick: () => answer(o.text, o.reply) },
         h('kbd', null, String(i + 1)), h('span', { class: 'txt' }, o.text))),
-      llm?.up && freeBox((text) => answer(text, 'Test passed. Going live.')));
+      llm?.up && freeBox((text, area) => typed(text, area)));
     session.append(h('div', { class: 'test-card' },
       h('header', { class: 'who tone-ops' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, OPS.glyph),
         h('div', null, h('h2', null, OPS.handle), h('p', { class: 'blurb' }, OPS.blurb))),
@@ -67,11 +73,54 @@ export function mountBoot(root, { log, fast, llm, offline, onDone }) {
     composer.querySelector('.opt')?.focus({ preventScroll: true });
 
     function answer(text, reply) {
+      if (answered || busy) return;
+      chat.append(h('div', { class: 'bubble you' }, text));
+      conclude(reply);
+    }
+
+    // Typed text is judged like any reply. Off-topic, the operators ask again, streamed,
+    // and the test stays open; past MAX_REASKS it ends anyway. If the judge fails, the
+    // box goes and the replies on offer remain, as on the play screen.
+    async function typed(text, area) {
+      if (answered || busy) return;
+      busy = true;
+      area.disabled = true;
+      const you = h('div', { class: 'bubble you typed', 'data-testid': 'sending' }, text);
+      const dots = h('div', { class: 'typing', 'aria-label': 'typing' }, h('i'), h('i'), h('i'));
+      chat.append(you, dots);
+      let streaming = null;
+      const paint = (t) => {
+        if (!streaming) { streaming = h('div', { class: 'bubble them tone-ops streaming', 'data-testid': 'streaming' }); dots.replaceWith(streaming); }
+        fill(streaming, lines(t));
+      };
+      try {
+        const out = await llm.test(text, { message: TEST_TEXT, options, asked, onText: paint });
+        dots.remove();
+        busy = false;
+        if (!out.other) { streaming?.remove(); conclude(options.find((o) => o.id === out.optId)?.reply ?? PASSED); return; }
+        if (out.final) { streaming?.remove(); log.event('boot', `test session: off-topic ${asked.length + 1} times`); conclude(FAILED); return; }
+        asked.push(out.question);
+        log.event('boot', `test session: off-topic, asked again (${asked.length})`);
+        if (streaming) { fill(streaming, lines(out.question)); streaming.removeAttribute('data-testid'); } else chat.append(h('div', { class: 'bubble them tone-ops' }, lines(out.question)));
+        area.value = '';
+        area.disabled = false;
+        area.dispatchEvent(new Event('input'));
+        area.focus({ preventScroll: true });
+      } catch {
+        busy = false;
+        dots.remove();
+        streaming?.remove();
+        you.remove();
+        area.closest('.free-row')?.remove();
+        log.event('llm', 'unavailable; the test takes one of the replies on offer');
+      }
+    }
+
+    function conclude(reply) {
       if (answered) return;
       answered = true;
       log.event('boot', 'test session answered');
       composer.remove();
-      chat.append(h('div', { class: 'bubble you' }, text));
       later(500, () => {
         chat.append(h('div', { class: 'bubble them tone-ops' }, lines(reply)));
         later(700, () => {

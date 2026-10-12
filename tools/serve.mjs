@@ -25,6 +25,15 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+// Local play only: with no src/llm-key.js on disk, the key comes from .dev.vars
+// (OPENROUTER_API_KEY=…) in memory, so the dev key is never written into src/ or a
+// build. Without either, an empty key: the game plays offline.
+async function devKeyModule(root) {
+  const vars = await readFile(join(root, '.dev.vars'), 'utf8').catch(() => '');
+  const key = vars.match(/^OPENROUTER_API_KEY=(.+)$/m)?.[1]?.trim() ?? '';
+  return { key, body: `export default ${JSON.stringify(key)};\n` };
+}
+
 export function createStaticServer(rootDir) {
   const root = resolve(rootDir);
   return createServer(async (req, res) => {
@@ -41,6 +50,12 @@ export function createStaticServer(rootDir) {
         return;
       }
       const info = await stat(file).catch(() => null);
+      if ((!info || !info.isFile()) && rel === '/src/llm-key.js') {
+        const { key, body } = await devKeyModule(root);
+        console.log(`[serve] LLM key: ${key ? 'from .dev.vars (local only)' : 'none, offline'}`);
+        res.writeHead(status, { 'content-type': MIME['.js'], 'cache-control': 'no-store' }).end(body);
+        return;
+      }
       if (!info || !info.isFile()) {
         status = 404;
         res.writeHead(status, { 'content-type': 'text/plain' }).end('Not found');

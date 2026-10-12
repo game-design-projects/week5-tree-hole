@@ -14,12 +14,8 @@ export function saveSettings(settings, storage = globalThis.localStorage) {
   try { storage?.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* private window: settings last this session only */ }
 }
 
-export async function resolveCity({ settings = loadSettings(), llm = null, offline = false } = {}) {
+export function resolveCity({ settings = loadSettings() } = {}) {
   if (settings.city?.city) return { ...settings.city, source: 'settings' };
-  if (!offline && llm) {
-    const found = await llm.geo();
-    if (found) return { ...found, source: 'ip' };
-  }
   return { ...DEFAULT_CITY, source: 'default' };
 }
 

@@ -13,6 +13,8 @@ import { freeBox } from './boot.js';
 // A message keeps one key from the moment it is waiting to the moment it is in the
 // thread, so it decrypts once.
 const entryKey = (npc, e, i) => (e.msgId && e.who === 'them' && !e.reply ? `m:${e.msgId}` : `${npc}:${i}`);
+// Them asking again after an off-topic reply, while the message is still waiting.
+const askKey = (msgId, i) => `a:${msgId}:${i}`;
 
 export function mountPlay(root, ctx) {
   const { log, llm } = ctx;
@@ -62,12 +64,19 @@ export function mountPlay(root, ctx) {
     render();
   }
 
-  function commit(msg, args, how) {
+  // `streamed`: their reaction is already on screen (it streamed in), so it neither
+  // waits for a typing pause nor decrypts again.
+  function commit(msg, args, how, { streamed = false } = {}) {
     const { state: next, outcome } = E.respond(state(), msg.id, args);
     ctx.setState(next);
     log.event('reply', `${msg.id} → ${outcome.optId} [${how}] leak ${outcome.leak}${outcome.from.length ? ` from ${outcome.from.join(',')}` : ''}`, { night: next.night, clock: E.clockLabel(next.clock) });
     log.info('state', { sus: next.sus, unease: next.unease });
-    ui.outcome = { npc: msg.npc, count: outcome.reply ? 2 : 1, revealed: 1 };
+    const count = outcome.reply ? 2 : 1;
+    ui.outcome = { npc: msg.npc, count, revealed: streamed ? count : 1 };
+    if (streamed) {
+      const thread = next.threads[msg.npc];
+      ui.shown.add(entryKey(msg.npc, thread.at(-1), thread.length - 1));
+    }
     ui.draft = '';
     ui.tab = 'chat';
     reveal();
@@ -80,26 +89,59 @@ export function mountPlay(root, ctx) {
     commit(msg, { optId }, 'picked');
   }
 
-  // Typed text goes to the judge. If the proxy fails, the box disappears and the
-  // message falls back to the replies on offer; nothing is sent in the meantime.
+  // Typed text goes to the judge, and their reaction streams in as it is reworded. If
+  // the judgement fails, the box disappears and the message falls back to the replies
+  // on offer; nothing is sent in the meantime.
   async function send(text) {
     if (busy() || !llm?.up) return;
     const s = state();
     const msg = ui.sel ? E.messageFor(s, ui.sel) : null;
     if (!msg) return;
-    ui.sending = { msgId: msg.id, text };
+    ui.sending = { msgId: msg.id, text, stream: '' };
     render();
     try {
-      const judged = await llm.reply(s, msg, text);
+      const judged = await llm.reply(s, msg, text, { onText: (t) => paintStream(msg.id, t) });
       ui.sending = null;
       if (state() !== s) { render(); return; }
-      commit(msg, { optId: judged.optId, text, leak: judged.leak, from: judged.from, reply: judged.reply, raw: judged.raw }, 'typed');
+      if (judged.other) { offTopic(msg, text, judged); return; }
+      commit(msg, { optId: judged.optId, text, leak: judged.leak, from: judged.from, reply: judged.reply, raw: judged.raw }, 'typed', { streamed: Boolean(judged.reply) });
     } catch {
       ui.sending = null;
       ui.draft = '';
       log.event('llm', 'unavailable; falling back to the replies on offer');
       render();
     }
+  }
+
+  // A reply that answered none of the replies on offer: they ask again (streamed, so
+  // it neither types nor decrypts again) and the message keeps waiting, or, past the
+  // limit, they say goodbye and stop using the service.
+  function offTopic(msg, text, judged) {
+    const { state: next, outcome } = E.offTopic(state(), msg.id, { text, leak: judged.leak, from: judged.from, question: judged.question, raw: judged.raw });
+    ctx.setState(next);
+    log.event('reply', `${msg.id} → other #${outcome.asked} leak ${outcome.leak}${outcome.from.length ? ` from ${outcome.from.join(',')}` : ''}${outcome.gaveUp ? ': they stop using the service' : ': they ask again'}`, { night: next.night, clock: E.clockLabel(next.clock) });
+    log.info('state', { sus: next.sus, unease: next.unease });
+    ui.draft = '';
+    if (outcome.gaveUp) {
+      const thread = next.threads[msg.npc];
+      ui.shown.add(entryKey(msg.npc, thread.at(-1), thread.length - 1));
+      ui.outcome = { npc: msg.npc, count: 1, revealed: 1 };
+    } else {
+      ui.shown.add(askKey(msg.id, outcome.asked - 1));
+    }
+    render();
+  }
+
+  // Their reaction as it streams: the first words replace the typing dots, later ones
+  // only refill that bubble (no re-render, so nothing else redraws or replays).
+  function paintStream(msgId, text) {
+    if (ui.sending?.msgId !== msgId) return;
+    ui.sending.stream = text;
+    const el = chat.querySelector('[data-testid="streaming"]');
+    if (!el) { render(); return; }
+    fill(el, lines(text));
+    const logEl = chat.querySelector('[data-testid="log"]');
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
   }
 
   // Show your reply at once, then their reaction after a typing pause.
@@ -114,8 +156,18 @@ export function mountPlay(root, ctx) {
     }
   }
 
+  // Next is never a dead click: while they are still typing it shows their reaction
+  // at once, and only the following press moves on.
   function proceed() {
-    if (!ui.outcome || busy()) return;
+    const o = ui.outcome;
+    if (!o || ui.sending) return;
+    if (o.revealed < o.count) {
+      ui.timers.splice(0).forEach(clearTimeout);
+      o.revealed = o.count;
+      log.event('ui', 'next pressed while typing: reaction shown at once');
+      render();
+      return;
+    }
     ui.outcome = null;
     selectDefault(true);
     render();
@@ -139,7 +191,7 @@ export function mountPlay(root, ctx) {
 
   // After a failure, try once per new message to bring the box back.
   function maybePing(msg) {
-    if (!llm?.endpoint || llm.up || !msg || ui.pinged.has(msg.id)) return;
+    if (!llm?.configured || llm.up || !msg || ui.pinged.has(msg.id)) return;
     ui.pinged.add(msg.id);
     llm.ping().then((up) => { if (up && el.isConnected) render(); });
   }
@@ -278,14 +330,21 @@ export function mountPlay(root, ctx) {
       composer = h('footer', { class: 'composer' },
         h('div', { class: 'after' },
           h('span', { class: 'chip' }, 'sent'),
-          h('button', { class: 'btn primary', 'data-testid': 'next', disabled: busy() ? true : null, onclick: proceed }, 'Next', h('kbd', null, '⏎'))));
+          h('button', { class: 'btn primary', 'data-testid': 'next', onclick: proceed }, 'Next', h('kbd', null, '⏎'))));
     } else {
       const msg = s.phase === 'play' && npc ? E.messageFor(s, npc) : null;
       draw(entries);
       if (msg) {
         logEl.append(bubble({ who: 'them', text: msg.text, time: E.clockLabel(msg.atMin), msgId: msg.id }, npc, { pending: true, key: `m:${msg.id}` }));
+        E.asksFor(s, msg.id).forEach((a, i) => {
+          logEl.append(bubble({ who: 'you', text: a.text, free: true }, npc));
+          if (a.question) logEl.append(bubble({ who: 'them', text: a.question }, npc, { key: askKey(msg.id, i) }));
+        });
         if (ui.sending?.msgId === msg.id) {
           logEl.append(h('div', { class: 'bubble you typed sending', 'data-testid': 'sending' }, ui.sending.text));
+          logEl.append(ui.sending.stream
+            ? h('div', { class: `bubble them tone-${npc} streaming`, 'data-testid': 'streaming' }, lines(ui.sending.stream))
+            : h('div', { class: 'typing', 'aria-label': 'typing' }, h('i'), h('i'), h('i')));
           composer = h('footer', { class: 'composer' }, h('div', { class: 'after' }, h('span', { class: 'hint' }, 'sending…')));
         } else {
           composer = composerFor(msg);

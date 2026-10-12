@@ -3,16 +3,30 @@
 // away, settings, a three-night run, every ending's paper, and the phone layout.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { MAX_REASKS } from '../src/config.js';
 import { ART, launch, loadState, open, playNight, tid } from './lib.mjs';
 
 let env;
 test.before(async () => { env = await launch(); });
 test.after(async () => { await env.close(); });
 
-const judgeAs = (result) => async (path) => {
-  if (path === '/health') return { body: { ok: true } };
-  if (path === '/geo') return { body: { city: 'Lisbon', country: 'PT', latitude: 38.72, longitude: -9.14, timezone: 'Europe/Lisbon' } };
-  if (path === '/reply') return { body: { result } };
+// A streamed chat completion, as OpenRouter sends it.
+const sse = (text) => `: OPENROUTER PROCESSING\n\n${text.match(/.{1,8}/gs).map((c) => `data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n\n`).join('')}data: [DONE]\n\n`;
+
+// Plays OpenRouter: Jev answers the judgement, Haiku streams the rewrite.
+const judgeAs = ({ option, level = 0, uses = {}, reply = '', hold = null }) => async (path) => {
+  if (path === '/v1/key') return { body: { data: { limit_remaining: 1 } } };
+  if (path === '/alpha/decisions') {
+    return { body: { model: 'typesafe/jev-1.13-20260917', answers: {
+      option: { type: 'choice', choice: option },
+      leak: { type: 'score', score: level, probabilities: { [String(level)]: 0.9 } },
+      ...Object.fromEntries(Object.entries(uses).map(([id, p]) => [`uses_${id}`, { type: 'noul', noul: p }])),
+    }, usage: { cost: 0 } } };
+  }
+  if (path === '/v1/chat/completions') {
+    await hold?.();
+    return { sse: sse(reply) };
+  }
   return { status: 404, body: {} };
 };
 
@@ -39,13 +53,50 @@ test('going live: the deploy log states the rules, the test session offers the r
   await context.close();
 });
 
-test('going live uses the connection’s city when the proxy knows it, and the one from Settings over that', async () => {
-  const { page, context } = await open(env, { query: '?fast=1&boot=1', llm: judgeAs({}) });
-  await page.click(tid('begin'));
-  await page.waitForSelector(tid('choice-real'));
-  assert.match(await page.textContent(tid('choice-real')), /Lisbon/);
-  await context.close();
+// Plays OpenRouter for the test session: Jev answers `choice()`, Haiku asks again.
+const testSession = (choice) => async (path) => {
+  if (path === '/v1/key') return { body: { data: {} } };
+  if (path === '/alpha/decisions') return { body: { answers: { option: { type: 'choice', choice: choice() }, leak: { type: 'score', score: 0, probabilities: { 0: 0.9 } } } } };
+  if (path === '/v1/chat/completions') return { sse: sse('Sorry, what time is it there?') };
+  return { status: 404, body: {} };
+};
+const testLog = (page) => page.textContent('.test-log');
 
+test('going live: typed text is judged too; “hi” does not pass, the operators ask again', async () => {
+  let choice = 'other';
+  const { page, errors, context } = await open(env, { query: '?fast=1&boot=1', llm: testSession(() => choice) });
+  await page.click(tid('begin'));
+  await page.waitForSelector(tid('free-text'));
+  await page.fill(tid('free-text'), 'hi');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.querySelector('.test-log')?.textContent.includes('Sorry, what time is it there?') && !document.querySelector('[data-testid="free-text"]')?.disabled);
+  assert.equal(await page.$(tid('go-live')), null, '“hi” does not pass the test');
+  assert.doesNotMatch(await testLog(page), /Test passed/);
+  choice = 'real';
+  await page.fill(tid('free-text'), 'almost midnight, and raining');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector(tid('go-live'));
+  assert.match(await testLog(page), /Test passed\. Going live\./);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test(`going live: after ${MAX_REASKS} off-topic answers the test fails, and goes live anyway`, async () => {
+  const { page, errors, context } = await open(env, { query: '?fast=1&boot=1', llm: testSession(() => 'other') });
+  await page.click(tid('begin'));
+  for (let i = 1; i <= MAX_REASKS + 1; i += 1) {
+    await page.waitForFunction(() => { const a = document.querySelector('[data-testid="free-text"]'); return a && !a.disabled; });
+    await page.fill(tid('free-text'), `hi ${i}`);
+    await page.keyboard.press('Enter');
+    if (i <= MAX_REASKS) await page.waitForFunction((k) => (document.querySelector('.test-log')?.textContent.match(/Sorry, what time is it there\?/g) ?? []).length === k, i);
+  }
+  await page.waitForSelector(tid('go-live'));
+  assert.match(await testLog(page), /Test failed\. Going live anyway\./);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('going live uses the city from Settings', async () => {
   const second = await open(env, { query: '?fast=1&boot=1' });
   await second.page.click(tid('title-settings'));
   await second.page.fill(tid('city-input'), 'Lis');
@@ -73,8 +124,25 @@ test('one question, one answer: a picked reply is sent once, their reaction foll
   await context.close();
 });
 
+test('Next is never a dead click: during their typing it shows the reaction at once, the next click moves on', async () => {
+  const { page, errors, context } = await open(env, { query: '?boot=0' }); // real typing delays
+  await page.click(tid('begin'));
+  await page.click(tid('start-night'));
+  await page.locator(`${tid('composer')} .opt`).first().click();
+  assert.equal(await page.locator('.typing').count(), 1, 'their reaction is still typing');
+  assert.equal(await page.getAttribute(tid('next'), 'disabled'), null, 'Next is clickable while they type');
+  await page.click(tid('next'));
+  assert.equal(await page.locator('.typing').count(), 0, 'the reaction is shown at once');
+  assert.equal(await page.locator('.bubble.you').count(), 1);
+  assert.equal(await page.getAttribute(tid('thread-ty'), 'data-state'), 'idle', 'still on the same thread');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.$(tid('next')), null, 'the second press moves on');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('typed answers: the judge picks the branch, the reaction answers what you wrote', async () => {
-  const { page, errors, context } = await open(env, { llm: judgeAs({ option: 'window', leak: 1, from: [], reply: 'the mill road? just the institute lights i guess' }) });
+  const { page, errors, context } = await open(env, { llm: judgeAs({ option: 'window', level: 1, reply: 'the mill road? just the institute lights i guess' }) });
   await page.click(tid('begin'));
   await page.click(tid('start-night'));
   await page.fill(tid('free-text'), 'Is anything different down the mill road this week?');
@@ -85,19 +153,73 @@ test('typed answers: the judge picks the branch, the reaction answers what you w
   assert.match(thread, /just the institute lights i guess/);
   const saved = await page.evaluate(() => window.__th.app.state.answered['n1-ty-dog']);
   assert.deepEqual({ opt: saved.opt, free: saved.free, leak: saved.leak }, { opt: 'window', free: true, leak: 1 });
-  assert.ok(await page.evaluate(() => window.__th.app.state.llm['n1-ty-dog'].reply), 'the raw response is kept');
+  const raw = await page.evaluate(() => window.__th.app.state.llm['n1-ty-dog']);
+  assert.match(raw.judge, /"choice":"window"/, 'Jev’s raw answer is kept');
+  assert.match(raw.rewrite, /^: OPENROUTER PROCESSING[\s\S]*data: \[DONE\]/, 'and Haiku’s raw stream');
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('if the proxy fails, the text box disappears without a word and the replies on offer remain', async () => {
-  let fail = false;
-  const llm = async (path) => {
-    if (path === '/health') return { body: { ok: !fail } };
-    if (path === '/reply') return { status: 502, body: { error: 'upstream' } };
+test('typed answers stream in: their dots show while the judge and the rewrite work, then the reaction stays put with no second typing pause', async () => {
+  let release;
+  const held = new Promise((r) => { release = r; });
+  const { page, errors, context } = await open(env, { query: '?boot=0', llm: judgeAs({ option: 'window', level: 1, reply: 'the mill road? just the lights i guess', hold: () => held }) });
+  await page.click(tid('begin'));
+  await page.click(tid('start-night'));
+  await page.fill(tid('free-text'), 'Anything new down the mill road?');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector(tid('sending'));
+  await page.waitForSelector('.typing');
+  assert.equal(await page.$(tid('next')), null, 'nothing to move on to yet');
+  release();
+  await page.waitForSelector(tid('next'));
+  assert.equal(await page.locator('.typing').count(), 0, 'a streamed reaction does not type a second time');
+  assert.match(await page.textContent(tid('log')), /the mill road\? just the lights i guess/, 'and does not decrypt again');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test(`off-topic: they ask again up to ${MAX_REASKS} times, then stop using the service`, async () => {
+  let n = 0;
+  const llm = async (path, body) => {
+    if (path === '/v1/key') return { body: { data: {} } };
+    if (path === '/alpha/decisions') return { body: { answers: { option: { type: 'choice', choice: 'other' }, leak: { type: 'score', score: 0, probabilities: { 0: 0.9 } } } } };
+    if (path === '/v1/chat/completions') {
+      n += 1;
+      return { sse: sse(/stop using this service/.test(body.messages[0].content) ? 'forget it. not using this anymore' : `what? is that normal ${n}`) };
+    }
     return { status: 404, body: {} };
   };
-  const { page, context } = await open(env, { llm, allowErrors: [/502/, /llm\.test/] });
+  const { page, errors, context } = await open(env, { llm });
+  await page.click(tid('begin'));
+  await page.click(tid('start-night'));
+  for (let i = 1; i <= MAX_REASKS; i += 1) {
+    await page.fill(tid('free-text'), `dog ${i}`);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction((k) => document.querySelector('[data-testid="log"]')?.textContent.includes(`what? is that normal ${k}`) && document.querySelector('[data-testid="free-text"]'), i);
+    assert.equal(await page.$(tid('next')), null, 'still waiting for an answer');
+    assert.ok(await page.locator(`${tid('composer')} .opt`).count() >= 3, 'the replies on offer are still there');
+  }
+  await page.fill(tid('free-text'), 'dog again');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector(tid('next'));
+  assert.match(await page.textContent(tid('log')), /forget it\. not using this anymore/);
+  const answered = await page.evaluate(() => window.__th.app.state.answered['n1-ty-dog']);
+  assert.equal(answered.opt, 'other');
+  await page.click(tid('next'));
+  assert.equal(await page.getAttribute(tid('thread-ty'), 'data-state'), 'left');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('if the judgement fails, the text box disappears without a word and the replies on offer remain', async () => {
+  let fail = false;
+  const llm = async (path) => {
+    if (path === '/v1/key') return fail ? { status: 401, body: {} } : { body: { data: {} } };
+    if (path === '/alpha/decisions') return { status: 502, body: { error: { code: 502 } } };
+    return { status: 404, body: {} };
+  };
+  const { page, context } = await open(env, { llm, allowErrors: [/502/, /401/, /openrouter/] });
   await page.click(tid('begin'));
   await page.click(tid('start-night'));
   fail = true;
@@ -107,6 +229,10 @@ test('if the proxy fails, the text box disappears without a word and the replies
   assert.equal(await page.locator('.bubble.you').count(), 0, 'nothing was sent');
   assert.doesNotMatch(await page.textContent('body'), /signal|offline|unavailable/i, 'and nothing says why');
   assert.equal(await page.evaluate(() => Object.keys(window.__th.app.state.answered).length), 0);
+  fail = false; // the key is fine again: the next message brings the box back
+  await page.locator(`${tid('composer')} .opt`).first().click();
+  await page.click(tid('next'));
+  await page.waitForSelector(tid('free-text'));
   await context.close();
 });
 

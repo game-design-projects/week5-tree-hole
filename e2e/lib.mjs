@@ -1,7 +1,9 @@
 // Shared e2e setup: static server over the source tree + system Chrome
 // (playwright-core, no browser download). Pages open with ?fast=1 so typing
 // delays and animations don't slow the run. Every outside call is mocked:
-// Open-Meteo (weather, city search) and, when a test asks for it, the LLM proxy.
+// Open-Meteo (weather, city search) and, when a test asks for it, OpenRouter.
+// The page never reads a real key here: src/llm-key.js is always served by the
+// test, and OpenRouter is unreachable unless a test plays it or passes `key`.
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -9,7 +11,6 @@ import { createStaticServer } from '../tools/serve.mjs';
 
 export const ART = fileURLToPath(new URL('./artifacts/', import.meta.url));
 export const tid = (id) => `[data-testid="${id}"]`;
-export const LLM = 'http://llm.test';
 
 export async function launch() {
   await mkdir(ART, { recursive: true });
@@ -29,29 +30,43 @@ export async function launch() {
 
 const json = (body, status = 200) => ({ status, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
 
-// `llm`: a function (path, body) → { status?, body } that plays the proxy, or null for none.
-export async function open(env, { viewport = { width: 1280, height: 720 }, query = '?fast=1', llm = null, allowErrors = [] } = {}) {
+// `llm`: a function (path, body) → { status?, body } or { sse } (a streamed chat
+// completion, as text) that plays OpenRouter, for the
+// paths '/v1/key', '/alpha/decisions' (Jev) and '/v1/chat/completions' (Haiku); the
+// page gets a fake key. `live`: nothing is intercepted, the page loads its key the way
+// a player's browser does (tools/serve.mjs, from .dev.vars) and calls OpenRouter for
+// real (`pnpm test --tag live` only). Neither: an empty key, so the game plays offline.
+export async function open(env, { viewport = { width: 1280, height: 720 }, query = '?fast=1', llm = null, live = false, allowErrors = [] } = {}) {
   const context = await env.browser.newContext({ viewport, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const errors = [];
   const ignored = (t) => /fonts\.(googleapis|gstatic)\.com/.test(t) || allowErrors.some((re) => re.test(t));
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !ignored(m.text())) errors.push(`console: ${m.text()}`); });
-  page.on('requestfailed', (r) => { if (!ignored(r.url())) errors.push(`requestfailed: ${r.url()}`); });
+  page.on('requestfailed', (r) => {
+    const what = `${r.url()} (${r.failure()?.errorText ?? '?'})`;
+    if (!ignored(what)) errors.push(`requestfailed: ${what}`);
+  });
   await page.route('https://api.open-meteo.com/**', (r) => r.fulfill(json({ current: { temperature_2m: 12.4, weather_code: 61 }, current_units: { temperature_2m: '°C' } })));
   await page.route('https://geocoding-api.open-meteo.com/**', (r) => r.fulfill(json({ results: [{ name: 'Lisbon', country_code: 'PT', admin1: 'Lisbon', latitude: 38.72, longitude: -9.14, timezone: 'Europe/Lisbon' }] })));
   await page.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
-  if (llm) {
-    await page.route(`${LLM}/**`, async (r) => {
+  if (!live) {
+    await page.route('**/src/llm-key.js', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: `export default ${JSON.stringify(llm ? 'test-key' : '')};` }));
+    await page.route('https://openrouter.ai/**', async (r) => {
       const req = r.request();
-      if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'GET,POST,OPTIONS' } });
-      const path = new URL(req.url()).pathname;
+      if (!llm) {
+        errors.push(`unexpected OpenRouter call: ${req.url()}`);
+        return r.abort();
+      }
+      if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'authorization,content-type,x-title', 'access-control-allow-methods': 'GET,POST,OPTIONS' } });
+      const path = new URL(req.url()).pathname.replace(/^\/api/, '');
       const out = await llm(path, req.postData() ? JSON.parse(req.postData()) : null);
+      if (out.sse != null) return r.fulfill({ status: 200, contentType: 'text/event-stream', headers: { 'access-control-allow-origin': '*' }, body: out.sse });
       return r.fulfill(json(out.body, out.status ?? 200));
     });
   }
-  const q = llm ? `${query}${query.includes('?') ? '&' : '?'}llm=${encodeURIComponent(LLM)}` : query;
-  await page.goto(env.base + q);
+  await page.goto(env.base + query);
+  await page.waitForFunction(() => window.__th); // main.js loads the key before it starts (top-level await)
   return { context, page, errors };
 }
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../src/engine.js';
-import { DAWN, INQUIRY_AT, KNOWS, NIGHT_START, PANIC_AT, SHUTDOWN_AT, SUS_BY_LEAK, TICK, UNEASE_BY_LEAK, WARY_AT } from '../src/config.js';
+import { DAWN, INQUIRY_AT, KNOWS, MAX_REASKS, NIGHT_START, PANIC_AT, SHUTDOWN_AT, SUS_BY_LEAK, TICK, UNEASE_BY_LEAK, WARY_AT } from '../src/config.js';
 import { CANNED, CAST, CAST_IDS, NIGHTS } from '../src/content/index.js';
 import { atNight, playNight } from './helpers.js';
 
@@ -144,6 +144,59 @@ test('panic: the user sends a last message, you can only give the canned answer,
   s = playNight(s, 'safe');
   assert.equal(s.answered['n1-tomas-stop14'], undefined, 'their later messages never come');
   assert.equal(E.viewModel(s).threads.find((t) => t.npc === 'tomas').state, 'left');
+});
+
+test('off-topic: they ask again and the message keeps waiting; the exchange joins the thread when it is answered', () => {
+  let s = night1();
+  const clock = s.clock;
+  s = E.offTopic(s, 'n1-ty-dog', { text: 'dog', leak: 0, question: 'what? is it normal for a dog to stop eating' }).state;
+  assert.ok(ids(s).includes('n1-ty-dog'), 'still waiting for an answer');
+  assert.equal(s.answered['n1-ty-dog'], undefined);
+  assert.deepEqual(E.asksFor(s, 'n1-ty-dog').map((a) => [a.text, a.question]), [['dog', 'what? is it normal for a dog to stop eating']]);
+  assert.equal(s.threads.ty.length, 0, 'nothing is in the thread until the message is answered');
+  assert.equal(s.clock, Math.max(clock, E.hm('22:10')) + TICK, 'a reply spends time like any other');
+  s = say(s, 'n1-ty-dog', 'vet').state;
+  assert.deepEqual(s.threads.ty.map((e) => [e.who, e.text.split('\n')[0]]).slice(0, 4), [
+    ['them', 'hi. random question'], ['you', 'dog'], ['them', 'what? is it normal for a dog to stop eating'], ['you', E.resolveMessage(NIGHTS[0].messages[0], s).options.find((o) => o.id === 'vet').text.split('\n')[0]],
+  ]);
+  assert.equal(E.asksFor(s, 'n1-ty-dog').length, 0);
+});
+
+test('off-topic replies still cost what they give away', () => {
+  let s = upTo('n1-charles-notice');
+  const before = { sus: s.sus, unease: s.unease.charles };
+  s = E.offTopic(s, 'n1-charles-notice', { text: 'Ty says his dad is on nights', leak: 3, from: ['ty', 'charles', 'zed'], question: 'Pardon?' }).state;
+  assert.equal(s.sus, before.sus + SUS_BY_LEAK[3]);
+  assert.equal(s.unease.charles, before.unease + UNEASE_BY_LEAK[3]);
+  assert.deepEqual(E.asksFor(s, 'n1-charles-notice')[0].from, ['ty'], 'self and unknown people dropped');
+});
+
+test(`off-topic: after ${MAX_REASKS} re-asks, the next one makes them stop using the service, quietly`, () => {
+  let s = night1();
+  for (let i = 1; i <= MAX_REASKS; i += 1) {
+    const out = E.offTopic(s, 'n1-ty-dog', { text: `dog ${i}`, question: `again ${i}` });
+    assert.equal(out.outcome.gaveUp, false);
+    s = out.state;
+  }
+  const last = E.offTopic(s, 'n1-ty-dog', { text: 'dog 4', question: 'forget it. not using this anymore' });
+  assert.equal(last.outcome.gaveUp, true);
+  s = last.state;
+  assert.ok(E.hasLeft(s, 'ty'));
+  assert.equal(s.answered['n1-ty-dog'].opt, E.OTHER);
+  assert.equal(s.threads.ty.at(-1).text, 'forget it. not using this anymore');
+  assert.equal(s.threads.ty.filter((e) => e.who === 'you').length, MAX_REASKS + 1);
+  assert.equal(E.viewModel(s).threads.find((t) => t.npc === 'ty').state, 'left');
+  assert.equal(E.fateOf('ty', s).left, false, 'the paper does not tell it as a panic: no complaint, no screenshots');
+  assert.equal(E.fateOf('ty', s).gaveUp, true);
+  s = playNight(s, 'safe');
+  assert.ok(!Object.keys(s.answered).some((id) => id.startsWith('n1-ty-') && id !== 'n1-ty-dog'), 'their later messages never come');
+});
+
+test('off-topic is not offered to the operators or to a panicking user’s last words', () => {
+  const s = night1();
+  assert.equal(E.acceptsOther(E.messageFor(s, 'ty')), true);
+  assert.equal(E.acceptsOther({ npc: 'ops', kind: 'inquiry' }), false);
+  assert.equal(E.acceptsOther({ npc: 'ty', kind: 'panic' }), false);
 });
 
 test('a panic that goes public makes everyone they know uneasy', () => {

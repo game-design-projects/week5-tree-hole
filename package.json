@@ -1,12 +1,12 @@
 {
   "name": "tree-hole",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "You are a chat service. Six people in a river town write to you privately while something spreads from the east. You can see every conversation; crossing the line between them saves people and gets you noticed.",
   "type": "module",
   "scripts": {
     "dev": "node tools/serve.mjs",
-    "test": "node --test tests/*.test.js worker/test/*.test.js",
+    "test": "node scripts/test.mjs",
     "test:e2e": "node --test --test-concurrency=1 e2e/*.test.mjs",
     "build": "node tools/build.mjs"
   },

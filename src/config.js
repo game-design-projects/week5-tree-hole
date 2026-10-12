@@ -1,14 +1,10 @@
 // Every tunable in one place. The engine reads only from here; content files
 // carry per-message effects. APP_VERSION must equal package.json (tested).
 
-export const APP_VERSION = '0.6.0';
+export const APP_VERSION = '0.7.0';
 export const SAVE_KEY = 'tree-hole-save-v3';
 export const SAVE_VERSION = 3;
 export const SETTINGS_KEY = 'tree-hole-settings-v1';
-
-// The LLM proxy (worker/). Empty means offline: no free-text box, city defaults to New York.
-// ?llm=<url> overrides it for local testing.
-export const LLM_ENDPOINT = '';
 
 export const LAST_NIGHT = 3;
 
@@ -32,6 +28,9 @@ export const SUS_BY_LEAK = [0, 0, 2, 4];
 export const SHUTDOWN_AT = 20;
 // From night 2, the operators ask about it once a night when suspicion is this high.
 export const INQUIRY_AT = 6;
+// A typed reply that answers none of the replies on offer: they ask again, in their own
+// words, up to this many times. The next one, and they stop using the service.
+export const MAX_REASKS = 3;
 
 // A user's unease, raised by replies that know too much.
 export const UNEASE_BY_LEAK = [0, 0, 1, 2];

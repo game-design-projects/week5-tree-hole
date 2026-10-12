@@ -6,3 +6,8 @@ e2e/artifacts/
 .DS_Store
 *.log
 CLAUDE.md
+
+# the spend-capped OpenRouter key: src/llm-key.js ships it in the build,
+# .dev.vars holds it locally for `pnpm test --tag live`
+src/llm-key.js
+.dev.vars
