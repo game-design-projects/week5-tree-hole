@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **`?ending=6` no longer sits on a black screen for 4.5 s.** The worst ending's opening silence is part of the game, but in a preview it only looked like a hang (a near-invisible dot on black, and the fonts did not start loading until it ended). A preview now shows the ending screen at once; `?ending=6&silence=1` keeps the silence, and a real run to ending 6 is unchanged.
+
 ## [0.5.0] - 2026-10-12
 
 Playtest feedback, ten changes.

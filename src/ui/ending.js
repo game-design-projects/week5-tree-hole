@@ -6,10 +6,11 @@ import { CAST } from '../content/index.js';
 import { h } from './dom.js';
 import { renderMap } from './map.js';
 
-export function mountEnding(root, { state, log, fast, onRestart, onTitle }) {
+export function mountEnding(root, { state, log, fast, silence = true, onRestart, onTitle }) {
   const v = E.endingView(state);
   const map = E.mapView({ ...state, night: 7 }, { onlyActive: false });
-  log.event('ending', v.id, { n: v.n, survivors: v.survivors });
+  const silent = v.silence && silence && !fast;
+  log.event('ending', v.id, { n: v.n, survivors: v.survivors, silent });
   let timer = null;
 
   const body = () => h('div', { class: 'ending', 'data-testid': 'ending', dataset: { ending: v.id, n: v.n } },
@@ -34,7 +35,7 @@ export function mountEnding(root, { state, log, fast, onRestart, onTitle }) {
         h('button', { class: 'btn ghost', onclick: onTitle }, 'Title screen'))));
 
   let el;
-  if (v.silence && !fast) {
+  if (silent) {
     // Silence: nothing is shown and nothing can be answered.
     el = h('div', { class: 'silence', 'data-testid': 'silence', 'aria-label': 'Silence' }, h('i'));
     root.append(el);

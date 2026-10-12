@@ -5,10 +5,12 @@ import { mountTitle } from './title.js';
 import { mountPlay } from './play.js';
 import { mountEnding } from './ending.js';
 
-export function createApp(root, { log, fast, store, forceEnding = null, tutorial = null }) {
+export function createApp(root, { log, fast, store, forceEnding = null, previewSilence = false, tutorial = null }) {
   let state = forceEnding ? E.previewState(forceEnding) : store.load();
   let unmount = null;
   let screen = null;
+  // The first ending screen of a preview skips the opening silence; later ones follow the normal rules.
+  let skipSilence = Boolean(forceEnding) && !previewSilence;
 
   const setState = (s) => { state = s; store.save(s); };
   const newGame = () => {
@@ -39,7 +41,8 @@ export function createApp(root, { log, fast, store, forceEnding = null, tutorial
         onTitle: () => show('title'),
       });
     } else if (name === 'ending') {
-      unmount = mountEnding(root, { state: state ?? E.newGame(), log, fast, onRestart: newGame, onTitle: () => show('title') });
+      unmount = mountEnding(root, { state: state ?? E.newGame(), log, fast, silence: !skipSilence, onRestart: newGame, onTitle: () => show('title') });
+      skipSilence = false;
     }
   }
 

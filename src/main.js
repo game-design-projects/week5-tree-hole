@@ -1,5 +1,5 @@
 // Entry point. URL flags: ?debug=1 (verbose [tag] logs), ?fast=1 (no typing
-// delays or intro animation; used by e2e), ?ending=1…6 (preview an ending), ?tutorial=1|0 (force or skip the tutorial).
+// delays or intro animation; used by e2e), ?ending=1…6 (preview an ending; add &silence=1 for ending 6's opening silence), ?tutorial=1|0 (force or skip the tutorial).
 // window.__th is the e2e/debug hook.
 import * as engine from './engine.js';
 import { APP_VERSION } from './config.js';
@@ -18,10 +18,12 @@ log.event('boot', `Tree Hole v${APP_VERSION}`, { debug, fast });
 
 const ending = Number(params.get('ending'));
 const forceEnding = ending >= 1 && ending <= 6 ? ending : null;
+// A preview skips ending 6's opening silence (it is 4.5 s of black that reads as a hang); &silence=1 keeps it.
+const previewSilence = params.get('silence') === '1';
 
 // The tutorial shows the first time unless disabled: ?tutorial=0 off, ?tutorial=1 always, and never with ?fast=1.
 const tut = params.get('tutorial');
 const tutorial = tut === '1' ? 'always' : tut === '0' || fast ? null : 'first';
 
-const app = createApp(document.getElementById('app'), { log, fast, store, forceEnding, tutorial });
+const app = createApp(document.getElementById('app'), { log, fast, store, forceEnding, previewSilence, tutorial });
 window.__th = { app, engine, store, version: APP_VERSION };

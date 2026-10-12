@@ -231,10 +231,20 @@ test('each ending preview shows "Ending N of 6"', async () => {
 });
 
 test('the worst ending opens in silence, then shows the screen', async () => {
-  const { page, context } = await open(env, { query: '?ending=6' });
+  const { page, context } = await open(env, { query: '?ending=6&silence=1' });
   await page.waitForSelector(tid('silence'));
   assert.equal(await page.$(tid('ending')), null);
   await page.waitForSelector(tid('ending'), { timeout: 8000 });
+  await context.close();
+});
+
+test('?ending=6 previews the screen at once; the silence is opt-in with &silence=1', async () => {
+  const { page, context } = await open(env, { query: '?ending=6' });
+  await page.waitForSelector(tid('ending'), { timeout: 1500 });
+  assert.equal(await page.$(tid('silence')), null);
+  // The skip is one-shot: the next time the ending 6 screen mounts, it opens in silence again.
+  await page.evaluate(() => window.__th.app.show('ending'));
+  await page.waitForSelector(tid('silence'), { timeout: 1500 });
   await context.close();
 });
 
