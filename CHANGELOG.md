@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Every font size is about 8% smaller (rounded to half a pixel, never below 10px), including the title, masthead and headline `clamp()` bounds. Proportions between sizes are kept.
+
 ## [0.7.0] - 2026-10-12
 
 Typed answers, for real: judged by Jev, answered in character as it streams, and no server in between.
