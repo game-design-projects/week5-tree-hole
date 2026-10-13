@@ -36,8 +36,8 @@ const json = (body, status = 200) => ({ status, contentType: 'application/json',
 // page gets a fake key. `live`: nothing is intercepted, the page loads its key the way
 // a player's browser does (tools/serve.mjs, from .dev.vars) and calls OpenRouter for
 // real (`pnpm test --tag live` only). Neither: an empty key, so the game plays offline.
-export async function open(env, { viewport = { width: 1280, height: 720 }, query = '?fast=1', llm = null, live = false, allowErrors = [] } = {}) {
-  const context = await env.browser.newContext({ viewport, deviceScaleFactor: 1 });
+export async function open(env, { viewport = { width: 1280, height: 720 }, scale = 1, query = '?fast=1', llm = null, live = false, allowErrors = [] } = {}) {
+  const context = await env.browser.newContext({ viewport, deviceScaleFactor: scale });
   const page = await context.newPage();
   const errors = [];
   const ignored = (t) => /fonts\.(googleapis|gstatic)\.com/.test(t) || allowErrors.some((re) => re.test(t));

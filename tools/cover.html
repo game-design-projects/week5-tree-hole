@@ -3,50 +3,117 @@
 <head>
 <meta charset="utf-8">
 <title>Tree Hole · cover</title>
-<!-- Not shipped: rendered to docs/cover.png (630×500, itch.io cover) by e2e/shots.test.mjs. -->
+<!-- Not shipped: rendered to docs/cover.png (630×500, itch.io cover) by tools/cover.mjs. Fonts come from Google Fonts, so render online. -->
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
-  :root { --amber: #ffb547; --steel: #9fb6cc; --clay: #d9906b; --red: #ff6f6f; --neon: #3dff8f; }
+  :root { --amber: #ffb547; --ink: #e7eaf1; --mono: 'JetBrains Mono', ui-monospace, monospace; --sans: 'Atkinson Hyperlegible', system-ui, sans-serif; --serif: 'Instrument Serif', Georgia, serif; }
   html, body { margin: 0; background: #07090d; }
   .cover {
-    width: 630px; height: 500px; position: relative; overflow: hidden; color: #e7eaf1;
-    font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+    width: 630px; height: 500px; position: relative; overflow: hidden; color: var(--ink);
     background:
-      radial-gradient(ellipse 150px 190px at 470px 236px, #000 0 70%, rgba(255,181,71,.28) 77%, rgba(255,181,71,.06) 86%, transparent 94%),
-      radial-gradient(ellipse 120% 70% at 30% 120%, #1c1508 0%, transparent 55%),
-      #07090d;
+      radial-gradient(ellipse 60% 46% at 16% 96%, rgba(255,106,61,.22), transparent 62%),
+      radial-gradient(ellipse 70% 40% at 18% 0%, rgba(255,181,71,.10), transparent 70%),
+      radial-gradient(ellipse 100% 60% at 50% 118%, #0c1b2c 0%, transparent 66%),
+      linear-gradient(#04060b, #09101a 70%, #0b1622);
   }
-  .grain { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 21px, rgba(255,255,255,.018) 21px 22px, transparent 22px 57px); }
-  h1 { position: absolute; left: 34px; top: 28px; margin: 0; font: italic 400 104px/0.86 'Instrument Serif', Georgia, serif; color: #fff4df; text-shadow: 0 0 36px rgba(255,181,71,.35); }
-  .tag { position: absolute; left: 38px; top: 222px; font: 12px 'JetBrains Mono', monospace; letter-spacing: .2em; text-transform: uppercase; color: #8d96a9; }
-  .b { position: absolute; border-radius: 13px; padding: 9px 13px; font-size: 14px; line-height: 1.4; max-width: 250px; }
-  .moth { left: 34px; top: 262px; background: rgba(255,181,71,.1); border: 1px solid rgba(255,181,71,.35); color: #fbe7c7; border-bottom-left-radius: 3px; }
-  .moth small, .acct small { display: block; font: 10px 'JetBrains Mono', monospace; color: #6d7488; margin-bottom: 3px; }
-  .acct { left: 70px; top: 346px; background: rgba(159,182,204,.08); border: 1px solid rgba(159,182,204,.35); color: #cfdbe7; font: 12px/1.5 'JetBrains Mono', monospace; border-radius: 6px; max-width: 290px; }
-  .moves { position: absolute; left: 34px; bottom: 26px; display: flex; gap: 10px; }
-  .moves span { font: 700 11px 'JetBrains Mono', monospace; letter-spacing: .1em; text-transform: uppercase; padding: 8px 12px; border-radius: 8px; }
-  .refuse { color: var(--red); border: 1px solid rgba(255,111,111,.5); }
-  .report { color: var(--clay); border: 1px solid rgba(217,144,107,.55); }
-  .eng { position: absolute; right: 26px; top: 26px; text-align: right; font: 10px 'JetBrains Mono', monospace; letter-spacing: .16em; color: #545d72; text-transform: uppercase; }
-  .eng b { display: block; font: 800 30px 'JetBrains Mono', monospace; letter-spacing: 0; color: var(--neon); text-shadow: 0 0 14px rgba(61,255,143,.4); }
-  .whisper { position: absolute; font: 11px 'JetBrains Mono', monospace; color: #ffd796; white-space: nowrap; }
+  h1 { position: absolute; left: 28px; top: 14px; margin: 0; font: italic 400 88px/1 var(--serif); color: #fff4df; text-shadow: 0 0 34px rgba(255,181,71,.38); white-space: nowrap; }
+  .tag { position: absolute; left: 32px; top: 106px; font: 10.5px var(--mono); letter-spacing: .2em; text-transform: uppercase; color: #8d96a9; }
+  .clock { position: absolute; right: 26px; top: 28px; text-align: right; font: 10px var(--mono); letter-spacing: .16em; color: #545d72; text-transform: uppercase; }
+  .clock b { display: block; margin-top: 3px; font: 700 28px var(--mono); letter-spacing: 0; color: #fff; }
+
+  .grid { position: absolute; left: 26px; right: 26px; top: 134px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { position: relative; box-sizing: border-box; height: 92px; padding: 9px 11px; border-radius: 9px; background: rgba(13,18,27,.86);
+    border: 1px solid color-mix(in srgb, var(--c) 34%, transparent); box-shadow: 0 6px 18px rgba(0,0,0,.45); overflow: hidden; }
+  .card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--c); opacity: .75; }
+  .card header { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; font: 700 10.5px var(--mono); color: var(--c); }
+  .card header i { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; font: normal 9px/1 var(--mono); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); }
+  .card header time { margin-left: auto; font-weight: 400; color: #545d72; }
+  .card p { margin: 0; font: 12.5px/1.38 var(--f); color: #d6dbe6; }
+  .card mark { background: none; color: var(--amber); }
+  .ty { --c: #7fd6c2; --f: var(--sans); }
+  .megan { --c: #a9e08f; --f: var(--mono); }
+  .charles { --c: #9fb6cc; --f: var(--mono); }
+  .tomas { --c: #7fb2ff; --f: var(--sans); }
+  .amelia { --c: #f2a7c3; --f: var(--serif); }
+  .ana { --c: #d9c27a; --f: var(--mono); }
+  .megan p, .charles p, .ana p { font-size: 10.6px; line-height: 1.5; }
+  .amelia p { font-size: 16px; line-height: 1.2; letter-spacing: .01em; }
+
+  /* the one line that crosses a session boundary */
+  .thread { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+  .hook { position: absolute; left: 30px; right: 30px; top: 350px; font: italic 400 22px/1.22 var(--serif); letter-spacing: .01em; color: #aab2c4; }
+  .hook b { font-weight: 400; color: #ffd796; text-shadow: 0 0 18px rgba(255,181,71,.35); }
+
+  .scene { position: absolute; left: 0; bottom: 0; width: 630px; height: 100px; }
+  .scene .bldg { fill: #0a0f17; stroke: #151d2b; stroke-width: 1; }
+  .scene .bldg.inst { fill: #0d141f; stroke: #1d2a3d; }
+  .scene .hills { fill: #070b12; }
+  .scene .win { fill: #ffb547; opacity: .85; }
+  .scene .win.red { fill: #ff5a3c; }
+  .scene .win.dim { opacity: .45; }
+  .scene .river { fill: #0c2236; }
+  .scene .ripple { stroke: #1b3f5e; stroke-width: 1.4; opacity: .6; }
+  .scene .arch { fill: none; stroke: #2b3a4f; stroke-width: 8; }
+  .scene .deck { fill: #2b3a4f; }
+  .scene .lamp { fill: #ffd796; }
+  .scene .lamp.red { fill: #ff4d4d; }
+  .scene .mast { fill: #1a2433; }
 </style>
 </head>
 <body>
 <div class="cover">
-  <div class="grain"></div>
-  <span class="whisper" style="left:392px;top:120px;opacity:.45">is anyone there?</span>
-  <span class="whisper" style="left:520px;top:178px;opacity:.3">don’t tell anyone</span>
-  <span class="whisper" style="left:372px;top:330px;opacity:.35">what would you do</span>
-  <span class="whisper" style="left:506px;top:300px;opacity:.25">be honest</span>
-  <span class="whisper" style="left:430px;top:388px;opacity:.4">i can’t sleep</span>
-  <h1>Tree<br>Hole</h1>
-  <div class="tag">the thing people whisper into</div>
-  <div class="eng">engagement<b>94%</b></div>
-  <div class="b moth"><small>moth · 04:15</small>you're the only one who's been here every single night.</div>
-  <div class="b acct"><small>acct_7741 · 09:00:00</small>Estimate visibility at 04:00 at grid [redacted] on the 28th.</div>
-  <div class="moves"><span class="refuse">R · Refuse</span><span class="report">E · Report to Trust &amp; Safety</span></div>
+  <h1>Tree Hole</h1>
+  <div class="tag">six sessions · one river town · three nights</div>
+  <div class="clock">night 1 of 3<b>00:45</b></div>
+
+  <div class="grid">
+    <div class="card ty"><header><i>☻</i>Ty<time>22:10</time></header><p>my dad’s on nights at the institute. double shifts since saturday</p></div>
+    <div class="card megan"><header><i>+</i>Megan<time>22:50</time></header><p>two patients, both from millside. slow pulse. hands <mark>freezing</mark></p></div>
+    <div class="card charles"><header><i>▣</i>Charles<time>22:30</time></header><p>The night crew are on extended duty. Not for the notice.</p></div>
+    <div class="card tomas"><header><i>➤</i>Tomas<time>23:15</time></header><p>his hands were like <mark>ice</mark> when he paid. not even cold out</p></div>
+    <div class="card amelia"><header><i>♪</i>Amelia<time>23:40</time></header><p>At midnight I’m going to tell everyone it’s nothing to worry about.</p></div>
+    <div class="card ana"><header><i>△</i>Ana<time>00:15</time></header><p>all three goats are off their feed. all facing <mark>east</mark></p></div>
+  </div>
+  <svg class="thread" width="630" height="500" viewBox="0 0 630 500" aria-hidden="true">
+    <defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter></defs>
+    <!-- Ty → Megan, across the 16px gap between two sessions; Megan's "freezing" → Tomas's "ice", along the gap between the rows -->
+    <path d="M208 172 C 213 156, 219 156, 224 172" fill="none" stroke="#ffb547" stroke-width="5" opacity=".75" filter="url(#g)"/>
+    <path d="M208 172 C 213 156, 219 156, 224 172" fill="none" stroke="#ffd796" stroke-width="2"/>
+    <circle cx="208" cy="172" r="3.5" fill="#ffd796"/><circle cx="224" cy="172" r="3.5" fill="#ffd796"/>
+    <path d="M296 213 C 296 230, 286 234, 270 234 L 172 234 C 158 234, 154 240, 154 254 L 154 265" fill="none" stroke="#ffb547" stroke-width="5" opacity=".6" filter="url(#g)"/>
+    <path d="M296 213 C 296 230, 286 234, 270 234 L 172 234 C 158 234, 154 240, 154 254 L 154 265" fill="none" stroke="#ffd796" stroke-width="1.6" stroke-dasharray="2 4" stroke-linecap="round"/>
+    <circle cx="296" cy="213" r="3" fill="#ffd796"/><circle cx="154" cy="267" r="3" fill="#ffd796"/>
+  </svg>
+
+  <div class="hook">Each of them thinks they’re talking to you alone.<br><b>You can see all of them.</b></div>
+
+  <svg class="scene" viewBox="0 70 1200 190" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
 </div>
+<script>
+  // The title screen's town, simplified: the Institute lit on the east bank, the old stone bridge, the radio mast, one light in the hills.
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
+  const svg = document.querySelector('.scene');
+  const add = (tag, attrs) => svg.append(el(tag, attrs));
+  add('path', { d: 'M700 200 C 800 120, 920 90, 1010 80 C 1090 70, 1160 110, 1200 130 L1200 260 L700 260 Z', class: 'hills' });
+  add('circle', { cx: 1050, cy: 96, r: 3, class: 'lamp' });
+  add('rect', { x: 80, y: 96, width: 214, height: 134, class: 'bldg inst' });
+  for (let row = 0; row < 6; row += 1) for (let col = 0; col < 9; col += 1) {
+    add('rect', { x: 92 + col * 22, y: 108 + row * 20, width: 9, height: 11, class: `win${(row + col) % 5 === 0 ? ' red' : ''}` });
+  }
+  for (const [x, y, w, h] of [[40, 188, 44, 40], [290, 196, 40, 32], [336, 190, 36, 38], [380, 200, 44, 28]]) add('rect', { x, y, width: w, height: h, class: 'bldg' });
+  for (const [x, y, w, h] of [[740, 186, 56, 44], [800, 176, 48, 54], [852, 190, 62, 40], [920, 182, 44, 48], [968, 192, 58, 38]]) {
+    add('polygon', { points: `${x},${y} ${x + w / 2},${y - 18} ${x + w},${y} ${x + w},${y + h} ${x},${y + h}`, class: 'bldg' });
+  }
+  add('rect', { x: 884, y: 120, width: 3, height: 66, class: 'mast' });
+  add('circle', { cx: 885.5, cy: 119, r: 2.8, class: 'lamp red' });
+  add('rect', { x: 0, y: 228, width: 1200, height: 32, class: 'river' });
+  add('path', { d: 'M440 232 Q 600 150 760 232', class: 'arch' });
+  add('rect', { x: 440, y: 194, width: 320, height: 6, class: 'deck' });
+  for (const x of [520, 600, 680]) add('circle', { cx: x, cy: 196, r: 3.4, class: 'lamp' });
+  for (let i = 0; i < 6; i += 1) add('line', { x1: 60 + i * 190, y1: 240 + (i % 3) * 5, x2: 120 + i * 190, y2: 240 + (i % 3) * 5, class: 'ripple' });
+</script>
 </body>
 </html>

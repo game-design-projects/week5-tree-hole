@@ -32,7 +32,7 @@ pnpm test --tag live   # one whole game through the real models (paid, needs .de
 pnpm build             # → dist/
 ```
 
-URL flags: `?fast=1` (no delays), `?debug=1` (logs), `?boot=0|1`, `?llm=0` (no typing), `?offline=1` (no network), `?ending=good-all|good-some|good-none|bad-all|bad-some|bad-none`.
+URL flags: `?fast=1` (no delays), `?seed=N` (a fixed new game), `?debug=1` (logs), `?boot=0|1`, `?llm=0` (no typing), `?offline=1` (no network), `?ending=good-all|good-some|good-none|bad-all|bad-some|bad-none`.
 
 | Path | What |
 |---|---|

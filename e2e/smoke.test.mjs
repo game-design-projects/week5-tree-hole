@@ -124,6 +124,23 @@ test('one question, one answer: a picked reply is sent once, their reaction foll
   await context.close();
 });
 
+test('?seed fixes a new game: the same seed, the same options in the same order', async () => {
+  const options = async (seed) => {
+    const { page, errors, context } = await open(env, { query: `?fast=1&seed=${seed}` });
+    await page.click(tid('begin'));
+    await page.click(tid('start-night'));
+    const opts = await page.locator(`${tid('composer')} .opt`).allTextContents();
+    const state = await page.evaluate(() => window.__th.app.state.seed);
+    assert.deepEqual(errors, []);
+    await context.close();
+    return { opts, state };
+  };
+  const [a, b] = [await options(5), await options(5)];
+  assert.equal(a.state, 5);
+  assert.deepEqual(a.opts, b.opts);
+  assert.equal(a.opts.length, 3);
+});
+
 test('Next is never a dead click: during their typing it shows the reaction at once, the next click moves on', async () => {
   const { page, errors, context } = await open(env, { query: '?boot=0' }); // real typing delays
   await page.click(tid('begin'));

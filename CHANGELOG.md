@@ -8,10 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`?seed=N`** fixes a new game’s seed, and with it the order of the options and which variant of each script is used. The store screenshots rely on it; it also reproduces a game. The seed is in the `game` log event.
 - **The paper’s Weather box is New York’s real hourly forecast** (Open-Meteo, no key). A menu picks the hour (the next 24, from now, with the day once it passes midnight); the box shows that hour’s temperature, conditions and chance of precipitation, and the current date and time in New York, kept ticking. Offline, or if the forecast can’t be had, the Gazette’s own weather line stays.
 
 ### Changed
 
+- **New store screenshots** (`docs/screenshots/`, 1280×720 at 2×, by the new `tools/shots.mjs`): the title, a session with four ways to answer, a typed answer and the reaction to it, Megan on night 2 working out how the service knows what it knows, and the morning paper. The ones on itch.io were v0.1’s.
+- **New cover** (`docs/cover.png`, rendered 2× from `tools/cover.html` by the new `tools/cover.mjs`): six session cards, one thread of light crossing between them, the river town below. The old one showed v0.1 (two users, Refuse / Report moves, an engagement meter). A test checks its size, ratio and that it names no real company.
 - Every font size is about 8% smaller (rounded to half a pixel, never below 10px), including the title, masthead and headline `clamp()` bounds. Proportions between sizes are kept.
 
 ### Fixed

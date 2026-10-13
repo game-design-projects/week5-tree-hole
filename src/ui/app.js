@@ -1,6 +1,6 @@
 // Screen router: title → going live (deploy log + test session) → play (night intro /
 // sessions / morning) → ending. Settings open over any screen.
-// `forceEnding` (?ending=good-all …) previews an ending without playing to it.
+// `forceEnding` (?ending=good-all …) previews an ending without playing to it; `seed` (?seed=7) fixes the new game's seed.
 import * as E from '../engine.js';
 import { mountTitle } from './title.js';
 import { mountBoot } from './boot.js';
@@ -8,7 +8,7 @@ import { mountPlay } from './play.js';
 import { mountEnding } from './ending.js';
 import { openSettings } from './settings.js';
 
-export function createApp(root, { log, fast, store, llm, offline = false, boot = true, forceEnding = null }) {
+export function createApp(root, { log, fast, store, llm, offline = false, boot = true, forceEnding = null, seed = null }) {
   let state = forceEnding ? E.previewState(forceEnding) : store.load();
   let unmount = null;
   let screen = null;
@@ -17,8 +17,9 @@ export function createApp(root, { log, fast, store, llm, offline = false, boot =
   const setState = (s) => { state = s; store.save(s); };
   const settings = () => openSettings(root, { log, offline, onClose: () => play?.rerender() });
   const newGame = () => {
-    setState(E.newGame(Math.floor(Math.random() * 2 ** 31)));
-    log.event('game', 'new game', { llm: Boolean(llm?.up) });
+    const gameSeed = seed ?? Math.floor(Math.random() * 2 ** 31);
+    setState(E.newGame(gameSeed));
+    log.event('game', 'new game', { seed: gameSeed, llm: Boolean(llm?.up) });
     show(boot ? 'boot' : 'play');
   };
 

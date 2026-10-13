@@ -36,8 +36,9 @@ log.event('boot', `Tree Hole v${APP_VERSION}`, { debug, fast, offline, llm: llm.
 
 const ending = params.get('ending');
 const forceEnding = engine.ENDING_IDS.includes(ending) ? ending : null;
+const seed = /^\d+$/.test(params.get('seed') ?? '') ? Number(params.get('seed')) : null; // fixes the option order and the script variants
 const boot = params.get('boot') === '1' || (params.get('boot') !== '0' && !(fast && params.get('boot') == null));
 
 llm.ping();
-const app = createApp(document.getElementById('app'), { log, fast, store, llm, offline, boot, forceEnding });
+const app = createApp(document.getElementById('app'), { log, fast, store, llm, offline, boot, forceEnding, seed });
 window.__th = { app, engine, store, llm, version: APP_VERSION };

@@ -11,7 +11,7 @@ Browser narrative game (NYU CS-GY 6553). The player is a chat/LLM service; six t
 - `src/engine.js`: rules as pure functions. `src/config.js`: tuning (SUS_BY_LEAK, SHUTDOWN_AT, WARY_AT, PANIC_AT, REPORTS_TO_SEAL, MAX_REASKS…).
 - `src/content/`: `cast`, `night1–3`, `ops` (operator questioning), `paper` (endings), `index`.
 - `src/llm.js`: OpenRouter client. `src/geo.js`: Open-Meteo (current weather, hourly forecast, city search). `src/ui/`: `boot`, `play`, `map`, `settings`, `ending`, `weather` (the paper's New York hourly box; falls back to the scripted line), `decrypt`.
-- `tools/serve.mjs` dev server, `tools/build.mjs` → `dist/`, `scripts/test.mjs` tag-aware test runner.
+- `tools/serve.mjs` dev server, `tools/build.mjs` → `dist/`, `tools/cover.mjs` renders `tools/cover.html` → `docs/cover.png` (the itch cover; online, for fonts), `tools/shots.mjs` → `docs/screenshots/` (the itch screenshots, from the real game, mocked like e2e), `scripts/test.mjs` tag-aware test runner.
 - Plain HTML + ES modules, no bundler, pnpm, Node ≥ 20.
 
 ## Content rules (enforced by `tests/content.test.js`)
@@ -33,7 +33,7 @@ Targets in `tests/balance.test.js`. Tune `src/config.js` and re-run after any co
 - `pnpm test --tag live` (`e2e/live.e2e.mjs`): a full game through real models, paid. Key only from `.dev.vars` (the user's scoped, capped key — never the global env key); skipped without it. Gates on playability (reaches the paper, branch/line agreement ≥ 90%, reactions answer the reply, median first words ≤ 3 s, "dog" → other → re-ask). Haiku's rewording freedom is only reported; loose rewording is fine.
 
 ## Flags
-`?fast=1`, `?debug=1`, `?boot=0|1`, `?llm=0` (no typing), `?offline=1` (no network), `?ending=good-all|good-some|good-none|bad-all|bad-some|bad-none`.
+`?fast=1`, `?seed=N` (fixes a new game's option order and script variants), `?debug=1`, `?boot=0|1`, `?llm=0` (no typing), `?offline=1` (no network), `?ending=good-all|good-some|good-none|bad-all|bad-some|bad-none`.
 
 ## Git
 Pushing to `main` auto-publishes to itch.io (`.github/workflows/publish-itch.yml`). Work on branches.
