@@ -336,6 +336,41 @@ test('every ending has its paper: verdict, headline, six people, the last line',
   }
 });
 
+test('the paper’s weather is New York’s hourly forecast, with a menu for the hour and the time now', async () => {
+  const { page, errors, context } = await open(env, { query: '?fast=1&ending=good-all' });
+  await page.waitForSelector(tid('wx-hour'));
+  assert.match(await page.textContent(`${tid('weather')} >> xpath=..`), /Weather · New York/);
+  const options = await page.locator(`${tid('wx-hour')} option`).allTextContents();
+  assert.equal(options.length, 24);
+  assert.deepEqual(options.slice(0, 3), ['Now · 4 pm', '5 pm', '6 pm']);
+  assert.ok(options.includes('Tue 12 am'), 'the day shows once the forecast passes midnight');
+  assert.match(await page.textContent(tid('wx-read')), /16°C\s*foggy/, 'the current hour comes first');
+  await page.selectOption(tid('wx-hour'), '2');
+  assert.match(await page.textContent(tid('wx-read')), /17°C\s*rain/);
+  assert.match(await page.textContent(tid('wx-read')), /Precipitation 18%/);
+  assert.match(await page.textContent(tid('wx-now')), /^Now in New York: [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, \d{1,2}:\d{2} (am|pm) E[SD]T$/);
+  assert.doesNotMatch(await page.textContent(tid('paper')), /Fog on the river/, 'the real forecast replaces the paper’s own line');
+  await page.screenshot({ path: `${ART}paper-weather.png`, fullPage: true });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('without a forecast (offline, or Open-Meteo down) the paper keeps its own weather line', async () => {
+  const offline = await open(env, { query: '?fast=1&offline=1&ending=good-all' });
+  await offline.page.waitForSelector(tid('paper'));
+  assert.match(await offline.page.textContent(tid('weather')), /Fog on the river until mid-morning/);
+  assert.equal(await offline.page.$(tid('wx-hour')), null);
+  await offline.context.close();
+
+  const down = await open(env, { query: '?fast=1&ending=good-all', allowErrors: [/500/] });
+  await down.page.route('https://api.open-meteo.com/**', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{}' }));
+  await down.page.reload();
+  await down.page.waitForFunction(() => document.querySelector('[data-testid="weather"]')?.textContent.includes('Fog on the river'));
+  assert.equal(await down.page.$(tid('wx-hour')), null);
+  assert.deepEqual(down.errors, []);
+  await down.context.close();
+});
+
 test('phone layout: no sideways scroll, tabs switch between sessions and chat, the paper stacks', async () => {
   const { page, errors, context } = await open(env, { viewport: { width: 390, height: 844 } });
   await page.click(tid('begin'));

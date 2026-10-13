@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The paper’s Weather box is New York’s real hourly forecast** (Open-Meteo, no key). A menu picks the hour (the next 24, from now, with the day once it passes midnight); the box shows that hour’s temperature, conditions and chance of precipitation, and the current date and time in New York, kept ticking. Offline, or if the forecast can’t be had, the Gazette’s own weather line stays.
+
 ### Changed
 
 - Every font size is about 8% smaller (rounded to half a pixel, never below 10px), including the title, masthead and headline `clamp()` bounds. Proportions between sizes are kept.

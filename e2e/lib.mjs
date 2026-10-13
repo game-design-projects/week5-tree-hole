@@ -47,7 +47,13 @@ export async function open(env, { viewport = { width: 1280, height: 720 }, query
     const what = `${r.url()} (${r.failure()?.errorText ?? '?'})`;
     if (!ignored(what)) errors.push(`requestfailed: ${what}`);
   });
-  await page.route('https://api.open-meteo.com/**', (r) => r.fulfill(json({ current: { temperature_2m: 12.4, weather_code: 61 }, current_units: { temperature_2m: '°C' } })));
+  // Two days of New York hours; "now" is 16:45 on the first, with fog at 4 pm and rain after.
+  const stamps = Array.from({ length: 48 }, (_, i) => `2026-10-${i < 24 ? '12' : '13'}T${String(i % 24).padStart(2, '0')}:00`);
+  await page.route('https://api.open-meteo.com/**', (r) => r.fulfill(json({
+    current: { time: '2026-10-12T16:45', temperature_2m: 12.4, weather_code: 61 }, current_units: { temperature_2m: '°C' },
+    hourly_units: { temperature_2m: '°C' },
+    hourly: { time: stamps, temperature_2m: stamps.map((_, i) => 8 + (i % 24) / 2), weather_code: stamps.map((_, i) => (i === 16 ? 45 : 61)), precipitation_probability: stamps.map((_, i) => i % 24) },
+  })));
   await page.route('https://geocoding-api.open-meteo.com/**', (r) => r.fulfill(json({ results: [{ name: 'Lisbon', country_code: 'PT', admin1: 'Lisbon', latitude: 38.72, longitude: -9.14, timezone: 'Europe/Lisbon' }] })));
   await page.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
   if (!live) {

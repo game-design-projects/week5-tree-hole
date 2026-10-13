@@ -6,8 +6,9 @@ import { PAPER_DATE } from '../config.js';
 import { PAPER, WHO } from '../content/index.js';
 import { h } from './dom.js';
 import { renderMap } from './map.js';
+import { weatherBox } from './weather.js';
 
-export function mountEnding(root, { state, log, fast, onRestart, onTitle }) {
+export function mountEnding(root, { state, log, fast, offline = false, onRestart, onTitle }) {
   const v = E.endingView(state);
   log.event('ending', v.id, { sus: v.sus, survivors: v.survivors });
   const mast = PAPER.masthead(v);
@@ -16,6 +17,7 @@ export function mountEnding(root, { state, log, fast, onRestart, onTitle }) {
   const side = PAPER.sidebar(v);
   const last = PAPER.lastLine(v);
   const map = E.mapView({ ...state, night: 4 }, { onlyActive: false, night: 4 });
+  const weather = weatherBox({ fallback: side.weather, offline, log });
 
   const el = h('div', { class: `ending ${v.good ? 'good' : 'bad'}${fast ? '' : ' unfold'}`, 'data-testid': 'ending', dataset: { ending: v.id } },
     h('div', { class: 'verdict', 'data-testid': 'verdict' },
@@ -37,7 +39,7 @@ export function mountEnding(root, { state, log, fast, onRestart, onTitle }) {
           h('h3', null, c.head),
           h('p', null, c.body)))),
       h('aside', { class: 'side' },
-        h('div', { class: 'box' }, h('h4', null, 'Weather'), h('p', null, side.weather)),
+        weather.el,
         h('div', { class: 'box' }, h('h4', null, 'On the radio'), h('p', null, side.radio)),
         h('div', { class: 'box' }, h('h4', null, 'Buses'), h('p', null, side.bus)),
         h('div', { class: 'box notices' }, h('h4', null, 'Notices'), h('p', null, side.notice)),
@@ -50,5 +52,5 @@ export function mountEnding(root, { state, log, fast, onRestart, onTitle }) {
       h('button', { class: 'btn ghost', onclick: onTitle }, 'Title screen')));
 
   root.append(el);
-  return () => el.remove();
+  return () => { weather.stop(); el.remove(); };
 }

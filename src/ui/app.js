@@ -50,7 +50,7 @@ export function createApp(root, { log, fast, store, llm, offline = false, boot =
       });
       unmount = play.unmount;
     } else if (name === 'ending') {
-      unmount = mountEnding(root, { state: state ?? E.newGame(), log, fast, onRestart: newGame, onTitle: () => show('title') });
+      unmount = mountEnding(root, { state: state ?? E.newGame(), log, fast, offline, onRestart: newGame, onTitle: () => show('title') });
     }
   }
 

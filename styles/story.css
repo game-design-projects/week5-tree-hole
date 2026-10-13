@@ -243,6 +243,22 @@
 .side .box h4 { margin: 0 0 4px; font: 700 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; border-bottom: 1px solid var(--rule); padding-bottom: 3px; }
 .side .box p { font-size: 12.5px; line-height: 1.45; }
 .side .notices p { font-style: italic; }
+.weather { color-scheme: light; }
+.wx-wait { color: var(--ink-soft); font-style: italic; }
+.wx-hour {
+  width: 100%; margin: 0 0 8px; padding: 5px 24px 5px 8px; appearance: none; cursor: pointer;
+  font: 600 11px var(--mono); letter-spacing: 0.04em; color: var(--ink-paper);
+  background: var(--paper-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%232a251e' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 8px center;
+  border: 1px solid var(--rule); border-radius: 2px;
+}
+.wx-hour:hover { background-color: #ddd1b6; }
+.wx-hour:focus-visible { outline: 2px solid var(--ink-paper); outline-offset: 2px; }
+.wx-read { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 2.6em; }
+.wx-temp { font: 700 28px/1 var(--news); letter-spacing: -0.02em; }
+.wx-words { font-size: 14px; font-style: italic; color: var(--ink-soft); }
+.wx-rain { flex-basis: 100%; font: 10.5px var(--mono); letter-spacing: 0.04em; color: var(--ink-soft); }
+.wx-now { margin-top: 8px; padding-top: 6px; border-top: 1px dotted rgba(42, 37, 30, 0.4); font: 10.5px/1.4 var(--mono); color: var(--ink-soft); }
+.wx-now b { display: block; font-weight: 600; color: var(--ink-paper); }
 .side .classified { font: 11.5px/1.4 var(--news); margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dotted rgba(42, 37, 30, 0.4); }
 .last { grid-area: last; margin-top: 18px; padding: 12px 14px; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; background: #0f131b; color: var(--you); font: 13px var(--mono); border-radius: 4px; }
 .last .label { font-size: 10px; letter-spacing: 0.08em; color: var(--faint); text-transform: uppercase; }
