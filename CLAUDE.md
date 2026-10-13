@@ -10,7 +10,7 @@ Browser narrative game (NYU CS-GY 6553). The player is a chat/LLM service; six t
 ## Layout
 - `src/engine.js`: rules as pure functions. `src/config.js`: tuning (SUS_BY_LEAK, SHUTDOWN_AT, WARY_AT, PANIC_AT, REPORTS_TO_SEAL, MAX_REASKS…).
 - `src/content/`: `cast`, `night1–3`, `ops` (operator questioning), `paper` (endings), `index`.
-- `src/llm.js`: OpenRouter client. `src/ui/`: `boot`, `play`, `map`, `settings`, `ending`, `decrypt`.
+- `src/llm.js`: OpenRouter client. `src/geo.js`: Open-Meteo (current weather, hourly forecast, city search). `src/ui/`: `boot`, `play`, `map`, `settings`, `ending`, `weather` (the paper's New York hourly box; falls back to the scripted line), `decrypt`.
 - `tools/serve.mjs` dev server, `tools/build.mjs` → `dist/`, `scripts/test.mjs` tag-aware test runner.
 - Plain HTML + ES modules, no bundler, pnpm, Node ≥ 20.
 
@@ -22,6 +22,7 @@ Targets in `tests/balance.test.js`. Tune `src/config.js` and re-run after any co
 
 ## LLM (no server)
 - The browser calls OpenRouter with the spend-capped key in `src/llm-key.js` (gitignored; CI writes it from secret `OPENROUTER_API_KEY`; build writes an empty one if absent → offline). Local play: `tools/serve.mjs` serves `/src/llm-key.js` from `.dev.vars` in memory.
+- Typed answers are off where the replies are forced (`E.acceptsTyping`: a wary user's message, a panicking user's last words); `respond`/`offTopic` throw on typed text there. The operators' inquiries take typed text (judged to a branch, never `other`).
 - Judging = Jev (`typesafe/jev-1.13`, `POST /api/alpha/decisions`), never an LLM: `choice` branch or `other` (story messages only, `E.acceptsOther` → `E.offTopic`: re-ask via Haiku up to `MAX_REASKS`, then they leave with `s.gaveUp[npc]`; `fateOf.left` stays false so the paper doesn't report a panic); `score` leak with probabilities keyed "0"–"3", pass = P(≥2) ≥ 0.5; `noul` per other user.
 - Rewording = `anthropic/claude-haiku-5.5`, streamed (SSE, `readStream`), `reasoning: { enabled: false }` for first-word latency; no `temperature`. No Jev gate on rewording (it rejected sensible rewrites and can't coexist with streaming).
 - Every true/false check goes to Jev, never an LLM.
