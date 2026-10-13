@@ -10,6 +10,10 @@ All notable changes to this project are documented here. The format follows
 
 - Every font size is about 8% smaller (rounded to half a pixel, never below 10px), including the title, masthead and headline `clamp()` bounds. Proportions between sizes are kept.
 
+### Fixed
+
+- A wary or panicking user could still be answered with typed text, which walked around the restrictions the rules had put on that message (no leak-3 replies for a wary user; one standard reply for a panicking one). The text box is now gone on both, and the engine refuses typed text there. The operators’ questions still take a typed answer.
+
 ## [0.7.0] - 2026-10-12
 
 Typed answers, for real: judged by Jev, answered in character as it streams, and no server in between.

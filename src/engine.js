@@ -277,6 +277,10 @@ export const OTHER = 'other';
 // Story messages take it; the operators' questions and a panicking user's last words
 // take one of their replies.
 export const acceptsOther = (msg) => msg.npc !== 'ops' && msg.kind !== 'panic';
+// Typing is shut off where the replies are forced: a panicking user's last words take the
+// standard one, and a wary user has had their leaky replies taken away, which a typed
+// answer would walk around. The operators' questions still take a typed answer.
+export const acceptsTyping = (msg) => msg.kind !== 'panic' && !msg.wary;
 export const asksFor = (s, msgId) => s.asks?.[msgId] ?? [];
 
 // The message, then any off-topic exchanges on it, into the thread.
@@ -304,6 +308,7 @@ export function offTopic(s0, msgId, { text, leak = 0, from = [], question = '', 
   const msg = pendingMessages(s0).find((m) => m.id === msgId);
   if (!msg) throw new Error(`message ${msgId} is not waiting`);
   if (!acceptsOther(msg)) throw new Error(`${msgId} takes one of its replies`);
+  if (!acceptsTyping(msg)) throw new Error(`${msgId} takes no typed text`);
 
   const s = clone(s0);
   const npc = msg.npc;
@@ -344,6 +349,7 @@ export function respond(s0, msgId, { optId, text = null, leak = null, from = nul
   const s = clone(s0);
   const npc = msg.npc;
   const free = typeof text === 'string' && text.trim().length > 0;
+  if (free && !acceptsTyping(msg)) throw new Error(`${msgId} takes no typed text`);
   const lvl = free && Number.isInteger(leak) ? clamp(leak, 0, LEAK_LEVELS - 1) : opt.leak;
   const whose = free && Array.isArray(from) ? cleanFrom(from, npc) : cleanFrom(opt.from, npc);
   const answer = free ? text.trim() : opt.text;

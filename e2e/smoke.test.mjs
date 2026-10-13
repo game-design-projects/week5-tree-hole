@@ -268,6 +268,40 @@ test('a panicking user leaves after one canned answer', async () => {
   await context.close();
 });
 
+test('with the replies forced (wary, panicking) the text box is gone; otherwise it is there', async () => {
+  const llm = async (path) => (path === '/v1/key' ? { body: { data: {} } } : { status: 404, body: {} });
+  const { page, context } = await open(env, { llm });
+  await loadState(page, () => {
+    const { engine: E, store } = window.__th;
+    let s = E.startNight(E.newGame(0));
+    s = E.respond(s, 'n1-ty-dog', { optId: 'vet' }).state;
+    s.unease.charles = 4;
+    s.extra.push({ id: 'panic-charles-n1', npc: 'charles', kind: 'panic', night: 1, at: s.clock });
+    store.save(s);
+  });
+  await page.click(tid('thread-charles'));
+  assert.equal(await page.locator(`${tid('composer')} .opt`).count(), 1, 'one canned reply');
+  assert.equal(await page.$(tid('free-text')), null, 'panic: no typing');
+  await context.close();
+
+  const wary = await open(env, { llm });
+  await loadState(wary.page, () => {
+    const { engine: E, store } = window.__th;
+    const s = E.startNight(E.newGame(0));
+    s.unease.ty = 2;
+    store.save(s);
+  });
+  assert.ok(await wary.page.$(tid('choice-deflect')));
+  assert.equal(await wary.page.$(tid('free-text')), null, 'wary: no typing');
+  await wary.context.close();
+
+  const calm = await open(env, { llm });
+  await calm.page.click(tid('begin'));
+  await calm.page.click(tid('start-night'));
+  await calm.page.waitForSelector(tid('free-text'));
+  await calm.context.close();
+});
+
 test('three nights play to the morning paper through the real UI', async () => {
   for (const index of [0, 3]) {
     const { page, errors, context } = await open(env);

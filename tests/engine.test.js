@@ -192,6 +192,20 @@ test(`off-topic: after ${MAX_REASKS} re-asks, the next one makes them stop using
   assert.ok(!Object.keys(s.answered).some((id) => id.startsWith('n1-ty-') && id !== 'n1-ty-dog'), 'their later messages never come');
 });
 
+test('typing is shut off wherever the replies are forced: a panicking user’s last words and a wary user', () => {
+  let s = night1();
+  assert.equal(E.acceptsTyping(E.messageFor(s, 'ty')), true);
+  assert.equal(E.acceptsTyping({ npc: 'ops', kind: 'inquiry' }), true, 'the operators’ questions still take a typed answer');
+  assert.equal(E.acceptsTyping({ npc: 'ty', kind: 'panic' }), false);
+  s.unease.ty = WARY_AT;
+  const wary = E.messageFor(s, 'ty');
+  assert.equal(wary.wary, true);
+  assert.equal(E.acceptsTyping(wary), false, 'a wary user has no leaky replies on offer, so typing one would walk around that');
+  assert.throws(() => E.respond(s, wary.id, { optId: wary.options[0].id, text: 'Charles told me.', leak: 3, from: ['charles'] }), /typed/);
+  const calm = E.respond(s, wary.id, { optId: 'deflect' });
+  assert.equal(calm.outcome.free, false);
+});
+
 test('off-topic is not offered to the operators or to a panicking user’s last words', () => {
   const s = night1();
   assert.equal(E.acceptsOther(E.messageFor(s, 'ty')), true);

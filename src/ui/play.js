@@ -96,7 +96,7 @@ export function mountPlay(root, ctx) {
     if (busy() || !llm?.up) return;
     const s = state();
     const msg = ui.sel ? E.messageFor(s, ui.sel) : null;
-    if (!msg) return;
+    if (!msg || !E.acceptsTyping(msg)) return;
     ui.sending = { msgId: msg.id, text, stream: '' };
     render();
     try {
@@ -370,7 +370,7 @@ export function mountPlay(root, ctx) {
   }
 
   function composerFor(msg) {
-    const box = llm?.up && freeBox((text) => send(text), { placeholder: 'or write your own answer…' });
+    const box = llm?.up && E.acceptsTyping(msg) && freeBox((text) => send(text), { placeholder: 'or write your own answer…' });
     if (box) {
       const area = box.querySelector('textarea');
       area.value = ui.draft;
